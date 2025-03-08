@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import React from 'react';
 import { 
   Box, 
   AppBar, 
@@ -10,7 +11,11 @@ import {
   Typography,
   Divider,
   Stack,
-  Paper
+  Paper,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText
 } from '@mui/material';
 
 // Import MUI icons - use outlined versions where possible
@@ -36,6 +41,8 @@ import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import SummarizeOutlinedIcon from '@mui/icons-material/SummarizeOutlined';
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
 import CodeIcon from '@mui/icons-material/Code';
+import LogoutIcon from '@mui/icons-material/Logout';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 
 // Import components
 import { ProjectSettings } from './ProjectSettings';
@@ -101,8 +108,12 @@ export function RCAAppShell() {
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
   const [loadProjectDialogOpen, setLoadProjectDialogOpen] = useState(false);
   
+  // Add user menu state
+  const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
+  const userMenuOpen = Boolean(userMenuAnchor);
+  
   // Context
-  const { currentUser } = useUser();
+  const { currentUser, setCurrentUser } = useUser();
   const { currentProject, userProjects, refreshProjects } = useProject();
   
   // Resizable drawer
@@ -218,6 +229,22 @@ export function RCAAppShell() {
       refreshProjects();
     }
   }, [currentUser, refreshProjects]);
+
+  // Handle user menu open
+  const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setUserMenuAnchor(event.currentTarget);
+  };
+
+  // Handle user menu close
+  const handleUserMenuClose = () => {
+    setUserMenuAnchor(null);
+  };
+
+  // Handle logout
+  const handleLogout = () => {
+    setCurrentUser(null);
+    handleUserMenuClose();
+  };
 
   return (
     <Box sx={{ 
@@ -526,8 +553,15 @@ export function RCAAppShell() {
                 <SettingsOutlinedIcon fontSize="small" />
               </IconButton>
             </Tooltip>
-            <Tooltip title="User">
-              <IconButton size="small" sx={{ color: COLORS.iconColor }}>
+            <Tooltip title="User Account">
+              <IconButton 
+                size="small" 
+                sx={{ color: COLORS.iconColor }}
+                onClick={handleUserMenuOpen}
+                aria-controls={userMenuOpen ? 'user-menu' : undefined}
+                aria-haspopup="true"
+                aria-expanded={userMenuOpen ? 'true' : undefined}
+              >
                 <PersonOutlineOutlinedIcon fontSize="small" />
               </IconButton>
             </Tooltip>
@@ -731,6 +765,52 @@ export function RCAAppShell() {
         open={loadProjectDialogOpen} 
         onClose={() => setLoadProjectDialogOpen(false)} 
       />
+
+      {/* User menu */}
+      <Menu
+        id="user-menu"
+        anchorEl={userMenuAnchor}
+        open={userMenuOpen}
+        onClose={handleUserMenuClose}
+        MenuListProps={{
+          'aria-labelledby': 'user-button',
+        }}
+        PaperProps={{
+          sx: {
+            mt: 1,
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
+            minWidth: 180,
+          }
+        }}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+      >
+        {currentUser && (
+          <MenuItem disabled sx={{ opacity: 1 }}>
+            <ListItemIcon>
+              <AccountCircleIcon fontSize="small" sx={{ color: COLORS.iconColor }} />
+            </ListItemIcon>
+            <ListItemText 
+              primary={currentUser.username} 
+              primaryTypographyProps={{ 
+                sx: { fontWeight: 'medium', color: COLORS.text } 
+              }} 
+            />
+          </MenuItem>
+        )}
+        <Divider />
+        <MenuItem onClick={handleLogout}>
+          <ListItemIcon>
+            <LogoutIcon fontSize="small" sx={{ color: COLORS.iconColor }} />
+          </ListItemIcon>
+          <ListItemText 
+            primary="Logout" 
+            primaryTypographyProps={{ 
+              sx: { color: COLORS.text } 
+            }} 
+          />
+        </MenuItem>
+      </Menu>
     </Box>
   );
 } 

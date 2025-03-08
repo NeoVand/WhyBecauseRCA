@@ -9,7 +9,7 @@ import {
   InputAdornment,
   IconButton
 } from '@mui/material';
-import { Visibility, VisibilityOff } from '@mui/icons-material';
+import { Visibility, VisibilityOff, Login as LoginIcon } from '@mui/icons-material';
 import { db } from '../db/LocalDB';
 import { useUser } from '../contexts/UserContext';
 import { v4 as uuidv4 } from 'uuid';
@@ -217,6 +217,7 @@ export function SignInDialog() {
           onClick={handleSignIn} 
           disabled={!username.trim() || isSubmitting}
           fullWidth
+          startIcon={<LoginIcon />}
           sx={{ 
             backgroundColor: COLORS.buttonBg,
             '&:hover': {
