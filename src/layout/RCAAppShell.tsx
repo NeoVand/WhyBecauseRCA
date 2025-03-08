@@ -10,8 +10,7 @@ import {
   Typography,
   Divider,
   Stack,
-  Paper,
-  Icon
+  Paper
 } from '@mui/material';
 
 // Import MUI icons - use outlined versions where possible
