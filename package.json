@@ -19,6 +19,7 @@
     "framer-motion": "^12.4.10",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-draggable": "^4.4.6",
     "react-router-dom": "^7.3.0",
     "uuid": "^11.1.0"
   },

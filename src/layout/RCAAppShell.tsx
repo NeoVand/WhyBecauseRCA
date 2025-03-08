@@ -1,5 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Box, 
   AppBar, 
@@ -17,6 +16,7 @@ import {
   ListItemIcon,
   ListItemText
 } from '@mui/material';
+import { NodeType } from '../models/types';
 
 // Import MUI icons - use outlined versions where possible
 import UndoOutlinedIcon from '@mui/icons-material/UndoOutlined';
@@ -44,15 +44,17 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import CropFreeOutlinedIcon from '@mui/icons-material/CropFreeOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import CableOutlinedIcon from '@mui/icons-material/CableOutlined'; // Cable icon for connections
+import MouseOutlinedIcon from '@mui/icons-material/MouseOutlined';
 
 // Import components
-import { ProjectSettings } from './ProjectSettings';
-import { AISettings } from './AISettings';
 import { DiagramView } from './DiagramView';
 import { ReportView } from './ReportView';
 import { SummaryView } from './SummaryView';
+import { ProjectSettings } from './ProjectSettings';
+import { AISettings } from './AISettings';
 import { NewProjectDialog } from '../components/NewProjectDialog';
 import { LoadProjectDialog } from '../components/LoadProjectDialog';
+import { NodeTypeTray } from '../components/NodeTypeTray';
 import { useProject } from '../contexts/ProjectContext';
 import { useUser } from '../contexts/UserContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -272,6 +274,21 @@ export function RCAAppShell() {
   const handleLogout = () => {
     setCurrentUser(null);
     handleUserMenuClose();
+  };
+
+  // Node type tray state
+  const [editorMode, setEditorMode] = useState<'select' | 'addNode'>('select');
+  const [nodeTypeTrayOpen, setNodeTypeTrayOpen] = useState(false);
+  const [activeNodeType, setActiveNodeType] = useState<NodeType | null>(null);
+
+  // Handle node added - switch to select mode
+  const handleNodeAdded = () => {
+    setEditorMode('select');
+  };
+
+  // Delete selected node - This will be handled by the DiagramView component
+  const deleteSelectedNode = () => {
+    // Just a placeholder, actual deletion happens in DiagramView
   };
 
   return (
@@ -680,7 +697,13 @@ export function RCAAppShell() {
             overflow: 'auto',
           }}>
             {/* Main view content */}
-            {mainTabIndex === 0 && <DiagramView />}
+            {mainTabIndex === 0 && (
+              <DiagramView 
+                activeNodeType={editorMode === 'addNode' ? activeNodeType : null}
+                isSelectMode={editorMode === 'select'}
+                onNodeAdded={handleNodeAdded}
+              />
+            )}
             {mainTabIndex === 1 && <ReportView />}
             {mainTabIndex === 2 && <SummaryView />}
 
@@ -731,27 +754,105 @@ export function RCAAppShell() {
             flexShrink: 0,
           }}>
             <Stack spacing={2} alignItems="center">
-              <Tooltip title="Add Node" placement="left">
-                <IconButton size="small" sx={{ color: COLORS.iconColor }}>
+              {/* Mode buttons */}
+              <Tooltip title={editorMode === 'select' ? 'Select Mode (active)' : 'Select Mode'} placement="left">
+                <IconButton 
+                  size="small" 
+                  sx={{ 
+                    color: editorMode === 'select' ? '#1976d2' : COLORS.iconColor,
+                    backgroundColor: editorMode === 'select' ? 'rgba(25, 118, 210, 0.1)' : 'transparent',
+                    '&:hover': {
+                      backgroundColor: editorMode === 'select' ? 'rgba(25, 118, 210, 0.2)' : 'rgba(0, 0, 0, 0.04)'
+                    }
+                  }}
+                  onClick={() => setEditorMode('select')}
+                >
+                  <MouseOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              
+              {/* Add Node button - opens node type tray */}
+              <Tooltip title={editorMode === 'addNode' ? 'Add Node Mode (active)' : 'Add Node'} placement="left">
+                <IconButton 
+                  size="small" 
+                  sx={{ 
+                    color: editorMode === 'addNode' ? '#1976d2' : COLORS.iconColor,
+                    backgroundColor: editorMode === 'addNode' ? 'rgba(25, 118, 210, 0.1)' : 'transparent',
+                    '&:hover': {
+                      backgroundColor: editorMode === 'addNode' ? 'rgba(25, 118, 210, 0.2)' : 'rgba(0, 0, 0, 0.04)'
+                    }
+                  }}
+                  onClick={() => {
+                    if (editorMode === 'addNode') {
+                      // If already in add node mode, switch to select mode
+                      setEditorMode('select');
+                      setNodeTypeTrayOpen(false);
+                    } else {
+                      // Switch to add node mode and open tray
+                      setEditorMode('addNode');
+                      setNodeTypeTrayOpen(true);
+                    }
+                  }}
+                >
                   <AddOutlinedIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
+              
+              {/* Add Connection button */}
               <Tooltip title="Add Connection" placement="left">
-                <IconButton size="small" sx={{ color: COLORS.iconColor }}>
+                <IconButton 
+                  size="small" 
+                  disabled={editorMode !== 'select'} 
+                  sx={{ 
+                    color: COLORS.iconColor,
+                    opacity: editorMode !== 'select' ? 0.5 : 1
+                  }}
+                >
                   <CableOutlinedIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
+              
+              <Divider sx={{ width: '70%', my: 0.5 }} />
+              
+              {/* Duplicate */}
               <Tooltip title="Duplicate" placement="left">
-                <IconButton size="small" sx={{ color: COLORS.iconColor }}>
+                <IconButton 
+                  size="small" 
+                  disabled={editorMode !== 'select'} 
+                  sx={{ 
+                    color: COLORS.iconColor,
+                    opacity: editorMode !== 'select' ? 0.5 : 1
+                  }}
+                >
                   <ContentCopyOutlinedIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
+              
+              {/* Delete */}
               <Tooltip title="Delete" placement="left">
-                <IconButton size="small" sx={{ color: COLORS.iconColor }}>
+                <IconButton 
+                  size="small" 
+                  disabled={editorMode !== 'select'} 
+                  sx={{ 
+                    color: COLORS.iconColor,
+                    opacity: editorMode !== 'select' ? 0.5 : 1
+                  }}
+                  onClick={deleteSelectedNode}
+                >
                   <DeleteOutlineOutlinedIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
             </Stack>
+            
+            {/* Node Type Tray */}
+            <NodeTypeTray 
+              open={nodeTypeTrayOpen} 
+              onClose={() => setNodeTypeTrayOpen(false)}
+              onSelectNodeType={(type) => {
+                setActiveNodeType(type);
+                setNodeTypeTrayOpen(false);
+              }}
+            />
           </Box>
         </Box>
       </Box>
