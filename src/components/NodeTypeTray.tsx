@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { 
   Box, 
   Paper, 
@@ -12,6 +12,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
 import InputBase from '@mui/material/InputBase';
+import { getThemeColors } from '../constants/themeColors';
 
 interface NodeTypeTrayProps {
   open: boolean;
@@ -22,17 +23,9 @@ interface NodeTypeTrayProps {
 export function NodeTypeTray({ open, onClose, onSelectNodeType }: NodeTypeTrayProps) {
   const { isDarkMode } = useTheme();
   const [searchTerm, setSearchTerm] = React.useState('');
+  const trayRef = useRef<HTMLDivElement>(null);
   
-  const getColors = (isDark: boolean) => ({
-    background: isDark ? '#333333' : '#ffffff',
-    border: isDark ? '#555555' : '#dddddd',
-    text: isDark ? '#e0e0e0' : '#333333',
-    secondaryText: isDark ? '#aaaaaa' : '#666666',
-    hoverBg: isDark ? '#444444' : '#f5f5f5',
-    iconBg: isDark ? '#444444' : '#f0f0f0'
-  });
-  
-  const COLORS = getColors(isDarkMode);
+  const COLORS = getThemeColors(isDarkMode);
   
   const filteredNodeTypes = React.useMemo(() => {
     if (!searchTerm) return Object.values(NODE_TYPES);
@@ -60,16 +53,33 @@ export function NodeTypeTray({ open, onClose, onSelectNodeType }: NodeTypeTrayPr
     }
   }, [open]);
   
+  // Click outside handler
+  useEffect(() => {
+    if (!open) return;
+    
+    const handleClickOutside = (event: MouseEvent) => {
+      if (trayRef.current && !trayRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [open, onClose]);
+  
   return (
     <Collapse in={open} orientation="vertical">
       <Paper
+        ref={trayRef}
         elevation={4}
         sx={{
           position: 'absolute',
           right: 58, // Positioned to the left of the toolbar
           top: 0,
           width: 240,
-          backgroundColor: COLORS.background,
+          backgroundColor: COLORS.dialogBg,
           border: `1px solid ${COLORS.border}`,
           zIndex: 100,
           borderRadius: 2,
@@ -87,46 +97,51 @@ export function NodeTypeTray({ open, onClose, onSelectNodeType }: NodeTypeTrayPr
             Select Node Type
           </Typography>
           <IconButton size="small" onClick={onClose}>
-            <CloseIcon fontSize="small" />
+            <CloseIcon fontSize="small" sx={{ color: COLORS.iconColor }} />
           </IconButton>
         </Box>
         
-        <Box sx={{ p: 1.5, borderBottom: `1px solid ${COLORS.border}` }}>
+        <Box sx={{ p: 1.5 }}>
           <Box sx={{ 
             display: 'flex', 
             alignItems: 'center',
-            backgroundColor: COLORS.iconBg,
+            backgroundColor: COLORS.inputBg,
             borderRadius: 1,
             px: 1.5
           }}>
-            <SearchIcon fontSize="small" sx={{ color: COLORS.secondaryText, mr: 1 }} />
+            <SearchIcon fontSize="small" sx={{ color: COLORS.iconColor, mr: 1 }} />
             <InputBase
               placeholder="Search node types..."
               value={searchTerm}
               onChange={handleSearchChange}
+              fullWidth
               sx={{ 
-                fontSize: '0.875rem', 
-                flex: 1,
-                color: COLORS.text
+                fontSize: '0.875rem',
+                color: COLORS.text,
+                '& input::placeholder': {
+                  color: COLORS.lightText,
+                  opacity: 1
+                }
               }}
-              autoFocus
             />
           </Box>
         </Box>
         
-        <Stack sx={{ maxHeight: 280, overflowY: 'auto', p: 1 }} spacing={0.5}>
-          {filteredNodeTypes.map((nodeType) => (
+        <Stack sx={{ maxHeight: 300, overflow: 'auto' }}>
+          {filteredNodeTypes.map(nodeType => (
             <Box
               key={nodeType.type}
+              onClick={() => handleNodeTypeClick(nodeType.type)}
               sx={{
                 display: 'flex',
                 alignItems: 'center',
-                p: 1,
-                borderRadius: 1,
+                py: 1,
+                px: 1.5,
                 cursor: 'pointer',
-                '&:hover': { backgroundColor: COLORS.hoverBg }
+                '&:hover': {
+                  backgroundColor: COLORS.hoverBg
+                }
               }}
-              onClick={() => handleNodeTypeClick(nodeType.type)}
             >
               <Box 
                 sx={{ 
@@ -148,7 +163,7 @@ export function NodeTypeTray({ open, onClose, onSelectNodeType }: NodeTypeTrayPr
                 <Typography variant="body2" sx={{ fontWeight: 500, color: COLORS.text }}>
                   {nodeType.name}
                 </Typography>
-                <Typography variant="caption" sx={{ color: COLORS.secondaryText }}>
+                <Typography variant="caption" sx={{ color: COLORS.lightText }}>
                   {nodeType.type === 'problem' || nodeType.type === 'incident' 
                     ? 'Mishap type' 
                     : nodeType.type === 'event' || nodeType.type === 'condition' 
@@ -161,7 +176,7 @@ export function NodeTypeTray({ open, onClose, onSelectNodeType }: NodeTypeTrayPr
           
           {filteredNodeTypes.length === 0 && (
             <Box sx={{ p: 2, textAlign: 'center' }}>
-              <Typography variant="body2" sx={{ color: COLORS.secondaryText }}>
+              <Typography variant="body2" sx={{ color: COLORS.lightText }}>
                 No node types match your search
               </Typography>
             </Box>

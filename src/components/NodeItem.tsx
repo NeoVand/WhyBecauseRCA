@@ -19,7 +19,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DescriptionIcon from '@mui/icons-material/Description';
 import ChatIcon from '@mui/icons-material/Chat';
 import SearchIcon from '@mui/icons-material/Search';
-import CloseIcon from '@mui/icons-material/Close';
+import { getThemeColors } from '../constants/themeColors';
 
 interface NodeItemProps {
   node: CausalNode;
@@ -27,10 +27,12 @@ interface NodeItemProps {
   onSelect: (nodeId: string) => void;
   onDragStart: () => void;
   onDragEnd: () => void;
+  className?: string;
 }
 
-export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd }: NodeItemProps) {
+export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, className }: NodeItemProps) {
   const { isDarkMode } = useTheme();
+  const THEME_COLORS = getThemeColors(isDarkMode);
   const [position, setPosition] = useState({ x: node.x, y: node.y });
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
@@ -52,6 +54,7 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd }:
   // Add new state for the node type modal
   const [nodeTypeModalOpen, setNodeTypeModalOpen] = useState(false);
   const [nodeTypeSearch, setNodeTypeSearch] = useState('');
+  const [modalPosition, setModalPosition] = useState({ top: 0, left: 0 });
   
   // Add redo state and functionality
   const [redoHistory, setRedoHistory] = useState<CausalNode[]>([]);
@@ -186,6 +189,16 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd }:
   // Add new functions for the node type modal
   const openNodeTypeModal = (e: React.MouseEvent) => {
     e.stopPropagation();
+    
+    // Get the position of the node element
+    if (nodeRef.current) {
+      const nodeRect = nodeRef.current.getBoundingClientRect();
+      setModalPosition({
+        top: nodeRect.top - 50, // Position above the node
+        left: nodeRect.left
+      });
+    }
+    
     setNodeTypeModalOpen(true);
   }
 
@@ -196,6 +209,10 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd }:
 
   const handleNodeTypeSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNodeTypeSearch(e.target.value.toLowerCase());
+  }
+
+  const handleNodeTypeSearchKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
   }
 
   const selectNodeType = (newType: NodeType) => {
@@ -303,7 +320,21 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd }:
     e.stopPropagation();
   };
   
+  // Check if the app is in pan mode
+  const isPanMode = () => {
+    // Get the diagram element
+    const diagramEl = document.getElementById('diagram-container');
+    // Check if it has a 'data-pan-mode' attribute set to true
+    return diagramEl?.getAttribute('data-pan-mode') === 'true';
+  };
+
   const handleMouseDown = (e: React.MouseEvent) => {
+    // Don't allow node dragging when in pan mode
+    if (isPanMode()) {
+      e.stopPropagation(); // Allow event to propagate to the diagram for panning
+      return;
+    }
+    
     if ((e.target as HTMLElement).tagName === 'INPUT' || 
         (e.target as HTMLElement).tagName === 'TEXTAREA' || 
         (e.target as HTMLElement).tagName === 'BUTTON' ||
@@ -533,6 +564,7 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd }:
     <Paper
       ref={nodeRef}
       elevation={0}
+      className={`${className || ''}`}
       sx={{
         position: 'absolute',
         left: 0, 
@@ -558,10 +590,10 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd }:
         userSelect: 'none',
         overflow: 'visible',
         height: 'auto', // Allow height to adjust with content
-        minHeight: isExpanded ? 'none' : 'auto' // Remove minimum height restriction in collapsed mode
+        minHeight: isExpanded ? 'none' : 'auto', // Remove minimum height restriction in collapsed mode
       }}
-      onMouseDown={handleMouseDown}
       onClick={handleClick}
+      onMouseDown={handleMouseDown}
       onDoubleClick={toggleExpanded}
     >
       {/* Main container with relative positioning for absolute elements */}
@@ -942,27 +974,45 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd }:
         maxWidth="xs"
         fullWidth
         onClick={(e) => e.stopPropagation()}
+        BackdropProps={{
+          style: { backgroundColor: 'transparent' }
+        }}
         sx={{ 
           '& .MuiDialog-paper': { 
             overflow: 'visible',
-            bgcolor: isDarkMode ? '#1e1e1e' : '#ffffff',
-          }
+            backgroundColor: `${THEME_COLORS.dialogBg} !important`,
+            color: THEME_COLORS.text,
+            borderRadius: '12px',
+            maxWidth: '280px', // A bit wider than before
+            position: 'absolute',
+            top: `${modalPosition.top}px`,
+            left: `${modalPosition.left}px`,
+            margin: 0,
+          },
         }}
       >
-        <DialogTitle sx={{ 
-          pb: 1,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
+        <DialogTitle 
+          sx={{ 
+            pb: 1,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            color: THEME_COLORS.text,
+            backgroundColor: `${THEME_COLORS.dialogBg} !important`,
+          }}
+        >
           <Typography variant="h6" sx={{ fontSize: '1rem' }}>
             Select Node Type
           </Typography>
-          <IconButton size="small" onClick={closeNodeTypeModal}>
-            <CloseIcon fontSize="small" />
-          </IconButton>
+          {/* Close button removed */}
         </DialogTitle>
-        <DialogContent sx={{ pt: 1 }}>
+        <DialogContent 
+          sx={{ 
+            pt: 1,
+            backgroundColor: `${THEME_COLORS.dialogBg} !important`,
+            color: THEME_COLORS.text
+          }}
+        >
           <Box sx={{ position: 'relative', mb: 2 }}>
             <Box sx={{ 
               position: 'absolute',
@@ -973,24 +1023,32 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd }:
               alignItems: 'center',
               pointerEvents: 'none'
             }}>
-              <SearchIcon fontSize="small" sx={{ color: isDarkMode ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)' }} />
+              <SearchIcon fontSize="small" sx={{ color: THEME_COLORS.iconColor }} />
             </Box>
             <TextField
               fullWidth
               placeholder="Search node types..."
               value={nodeTypeSearch}
               onChange={handleNodeTypeSearchChange}
+              onKeyDown={handleNodeTypeSearchKeyDown}
               variant="outlined"
               size="small"
               sx={{ 
                 '& .MuiOutlinedInput-root': {
                   paddingLeft: '36px',
                   '& fieldset': {
-                    borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
+                    borderColor: THEME_COLORS.border,
                   },
                   '&:hover fieldset': {
-                    borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)',
+                    borderColor: THEME_COLORS.focusBorder,
                   },
+                },
+                '& .MuiInputBase-input': {
+                  color: THEME_COLORS.text
+                },
+                '& .MuiInputBase-input::placeholder': {
+                  color: THEME_COLORS.lightText,
+                  opacity: 1
                 }
               }}
             />
@@ -1011,10 +1069,10 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd }:
                   cursor: 'pointer',
                   transition: 'background-color 0.2s',
                   '&:hover': {
-                    backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)'
+                    backgroundColor: THEME_COLORS.hoverBg
                   },
                   backgroundColor: currentNode.type === nodeType.type 
-                    ? (isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)')
+                    ? THEME_COLORS.listItemHover
                     : 'transparent'
                 }}
               >
@@ -1030,21 +1088,15 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd }:
                     mr: 2
                   }}
                 >
-                  <span className="material-icons" style={{ color: nodeType.color, fontSize: '16px' }}>
+                  <span className="material-icons" style={{ color: nodeType.color }}>
                     {nodeType.icon}
                   </span>
                 </Box>
                 <Box>
-                  <Typography variant="body2" sx={{ 
-                    fontWeight: 500, 
-                    color: isDarkMode ? '#ffffff' : '#333333'
-                  }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500, color: THEME_COLORS.text }}>
                     {nodeType.name}
                   </Typography>
-                  <Typography variant="caption" sx={{ 
-                    color: isDarkMode ? '#cccccc' : '#666666', 
-                    fontSize: '0.65rem' 
-                  }}>
+                  <Typography variant="caption" sx={{ color: THEME_COLORS.lightText }}>
                     {nodeType.type === 'problem' || nodeType.type === 'incident' 
                       ? 'Mishap type' 
                       : nodeType.type === 'event' || nodeType.type === 'condition' 
@@ -1057,7 +1109,7 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd }:
             
             {filteredNodeTypes.length === 0 && (
               <Box sx={{ p: 2, textAlign: 'center' }}>
-                <Typography variant="body2" sx={{ color: isDarkMode ? '#cccccc' : '#666666' }}>
+                <Typography variant="body2" sx={{ color: THEME_COLORS.lightText }}>
                   No node types match your search
                 </Typography>
               </Box>

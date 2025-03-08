@@ -10,7 +10,6 @@ import {
   Typography,
   Divider,
   Stack,
-  Paper,
   Menu,
   MenuItem,
   ListItemIcon,
@@ -43,7 +42,6 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import CropFreeOutlinedIcon from '@mui/icons-material/CropFreeOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
-import CableOutlinedIcon from '@mui/icons-material/CableOutlined'; // Cable icon for connections
 import MouseOutlinedIcon from '@mui/icons-material/MouseOutlined';
 
 // Import components
@@ -277,9 +275,12 @@ export function RCAAppShell() {
   };
 
   // Node type tray state
-  const [editorMode, setEditorMode] = useState<'select' | 'addNode'>('select');
+  const [editorMode, setEditorMode] = useState<'select' | 'addNode' | 'pan'>('select');
   const [nodeTypeTrayOpen, setNodeTypeTrayOpen] = useState(false);
   const [activeNodeType, setActiveNodeType] = useState<NodeType | null>(null);
+  const [isPanActive, setIsPanActive] = useState(false);
+  // Store previous mode for spacebar pan
+  const [previousMode, setPreviousMode] = useState<'select' | 'addNode' | null>(null);
 
   // Handle node added - switch to select mode
   const handleNodeAdded = () => {
@@ -290,6 +291,95 @@ export function RCAAppShell() {
   const deleteSelectedNode = () => {
     // Just a placeholder, actual deletion happens in DiagramView
   };
+
+  // Toggle pan mode (button click)
+  const togglePanMode = () => {
+    // If already in pan mode, switch back to select mode
+    if (editorMode === 'pan') {
+      setEditorMode('select');
+      setIsPanActive(false);
+      setPreviousMode(null);
+    } else {
+      // Switch to pan mode (permanent)
+      setPreviousMode(editorMode as 'select' | 'addNode');
+      setEditorMode('pan');
+      setIsPanActive(true);
+    }
+  };
+
+  // Set select mode and ensure pan mode is deactivated
+  const setSelectMode = () => {
+    setEditorMode('select');
+    setIsPanActive(false);
+    setPreviousMode(null);
+  };
+
+  // Set add node mode
+  const setAddNodeMode = () => {
+    if (editorMode === 'addNode') {
+      // If already in add node mode, switch to select mode
+      setEditorMode('select');
+      setNodeTypeTrayOpen(false);
+    } else {
+      // Just open tray but stay in select mode until node type is selected
+      setNodeTypeTrayOpen(true);
+    }
+  };
+
+  // Space key handler for temporary pan mode
+  useEffect(() => {
+    // Only add the listener if we're in the diagram tab
+    if (mainTabIndex !== 0) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only activate pan mode with space if not editing text
+      // Check if the active element is a text input or contentEditable
+      const activeElement = document.activeElement;
+      const isTextInput = activeElement?.tagName === 'INPUT' 
+        || activeElement?.tagName === 'TEXTAREA'
+        || activeElement?.getAttribute('contenteditable') === 'true'
+        || activeElement?.tagName === 'SELECT';
+
+      if (e.code === 'Space' && !isTextInput && !isPanActive) {
+        e.preventDefault(); // Prevent scrolling
+        // Save current mode but don't change it
+        if (editorMode !== 'pan') {
+          setPreviousMode(editorMode as 'select' | 'addNode');
+        }
+        // Only set isPanActive - don't change editorMode
+        setIsPanActive(true);
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        // Only deactivate if we're not in permanent pan mode (button-activated)
+        if (editorMode !== 'pan') {
+          setIsPanActive(false);
+        }
+      }
+    };
+
+    // Use capture phase to ensure we get the events before other handlers
+    window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('keyup', handleKeyUp, true);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keyup', handleKeyUp, true);
+    };
+  }, [mainTabIndex, isPanActive, editorMode, previousMode]);
+
+  // Update tab change to reset pan mode
+  useEffect(() => {
+    // Reset pan mode when changing tabs
+    if (mainTabIndex !== 0) {
+      setIsPanActive(false);
+      if (editorMode === 'pan') {
+        setEditorMode('select');
+      }
+    }
+  }, [mainTabIndex]);
 
   return (
     <Box sx={{ 
@@ -701,159 +791,141 @@ export function RCAAppShell() {
               <DiagramView 
                 activeNodeType={editorMode === 'addNode' ? activeNodeType : null}
                 isSelectMode={editorMode === 'select'}
+                isPanMode={editorMode === 'pan' || isPanActive}
                 onNodeAdded={handleNodeAdded}
               />
             )}
             {mainTabIndex === 1 && <ReportView />}
             {mainTabIndex === 2 && <SummaryView />}
+          </Box>
 
-            {/* View Controls (only in diagram view) */}
-            {mainTabIndex === 0 && (
-              <Paper
-                elevation={2}
-                sx={{
-                  position: 'absolute',
-                  bottom: 16,
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  p: 0.5,
-                  borderRadius: 8,
-                  backgroundColor: isDarkMode ? 'rgba(24, 24, 24, 0.9)' : 'rgba(255, 255, 255, 0.9)',
-                  border: `1px solid ${COLORS.border}`,
-                  zIndex: 1000,
+          {/* RIGHT SIDEBAR (TOOLBAR) - Only visible in diagram view */}
+          {mainTabIndex === 0 && (
+            <Box sx={{
+              width: RIGHT_TOOLBAR_WIDTH,
+              borderLeft: BORDER_STYLE,
+              display: 'flex',
+              flexDirection: 'column',
+              p: 0.5,
+              pt: 3,
+              alignItems: 'center',
+              backgroundColor: COLORS.background,
+              flexShrink: 0,
+            }}>
+              <Stack spacing={2} alignItems="center">
+                {/* Add Node button - opens node type tray */}
+                <Tooltip title={editorMode === 'addNode' ? 'Add Node Mode (active)' : 'Add Node'} placement="left">
+                  <IconButton 
+                    size="small" 
+                    sx={{ 
+                      color: editorMode === 'addNode' ? '#1976d2' : COLORS.iconColor,
+                      backgroundColor: editorMode === 'addNode' ? 'rgba(25, 118, 210, 0.1)' : 'transparent',
+                      '&:hover': {
+                        backgroundColor: editorMode === 'addNode' ? 'rgba(25, 118, 210, 0.2)' : 'rgba(0, 0, 0, 0.04)'
+                      }
+                    }}
+                    onClick={setAddNodeMode}
+                  >
+                    <AddOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                
+                {/* Duplicate */}
+                <Tooltip title="Duplicate" placement="left">
+                  <IconButton 
+                    size="small" 
+                    disabled={editorMode !== 'select'} 
+                    sx={{ 
+                      color: COLORS.iconColor,
+                      opacity: editorMode !== 'select' ? 0.5 : 1
+                    }}
+                  >
+                    <ContentCopyOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                
+                {/* Delete */}
+                <Tooltip title="Delete" placement="left">
+                  <IconButton 
+                    size="small" 
+                    disabled={editorMode !== 'select'} 
+                    sx={{ 
+                      color: COLORS.iconColor,
+                      opacity: editorMode !== 'select' ? 0.5 : 1
+                    }}
+                    onClick={deleteSelectedNode}
+                  >
+                    <DeleteOutlineOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                
+                <Divider sx={{ width: '70%', my: 0.5 }} />
+                
+                {/* VIEW CONTROLS - With Select as first button */}
+                {/* Select Mode button */}
+                <Tooltip title={editorMode === 'select' ? 'Select Mode (active)' : 'Select Mode'} placement="left">
+                  <IconButton 
+                    size="small" 
+                    sx={{ 
+                      color: editorMode === 'select' ? '#1976d2' : COLORS.iconColor,
+                      backgroundColor: editorMode === 'select' ? 'rgba(25, 118, 210, 0.1)' : 'transparent',
+                      '&:hover': {
+                        backgroundColor: editorMode === 'select' ? 'rgba(25, 118, 210, 0.2)' : 'rgba(0, 0, 0, 0.04)'
+                      }
+                    }}
+                    onClick={setSelectMode}
+                  >
+                    <MouseOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                
+                <Tooltip title={editorMode === 'pan' ? 'Pan Mode (active)' : 'Pan Mode'} placement="left">
+                  <IconButton 
+                    size="small" 
+                    sx={{ 
+                      color: editorMode === 'pan' ? '#1976d2' : COLORS.iconColor,
+                      backgroundColor: editorMode === 'pan' ? 'rgba(25, 118, 210, 0.1)' : 'transparent',
+                      '&:hover': {
+                        backgroundColor: editorMode === 'pan' ? 'rgba(25, 118, 210, 0.2)' : 'rgba(0, 0, 0, 0.04)'
+                      }
+                    }}
+                    onClick={togglePanMode}
+                  >
+                    <PanToolOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                
+                <Tooltip title="Zoom In" placement="left">
+                  <IconButton size="small" sx={{ color: COLORS.iconColor }}>
+                    <ZoomInOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                
+                <Tooltip title="Zoom Out" placement="left">
+                  <IconButton size="small" sx={{ color: COLORS.iconColor }}>
+                    <ZoomOutOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                
+                <Tooltip title="Fit to Screen" placement="left">
+                  <IconButton size="small" sx={{ color: COLORS.iconColor }}>
+                    <CropFreeOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+              
+              {/* Node Type Tray */}
+              <NodeTypeTray 
+                open={nodeTypeTrayOpen} 
+                onClose={() => setNodeTypeTrayOpen(false)}
+                onSelectNodeType={(type) => {
+                  setActiveNodeType(type);
+                  setEditorMode('addNode');
+                  setNodeTypeTrayOpen(false);
                 }}
-              >
-                <IconButton size="small" sx={{ mx: 0.5, color: COLORS.iconColor }}>
-                  <ZoomInOutlinedIcon fontSize="small" />
-                </IconButton>
-                <IconButton size="small" sx={{ mx: 0.5, color: COLORS.iconColor }}>
-                  <ZoomOutOutlinedIcon fontSize="small" />
-                </IconButton>
-                <IconButton size="small" sx={{ mx: 0.5, color: COLORS.iconColor }}>
-                  <PanToolOutlinedIcon fontSize="small" />
-                </IconButton>
-                <IconButton size="small" sx={{ mx: 0.5, color: COLORS.iconColor }}>
-                  <CropFreeOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Paper>
-            )}
-          </Box>
-
-          {/* RIGHT SIDEBAR (TOOLBAR) */}
-          <Box sx={{
-            width: RIGHT_TOOLBAR_WIDTH,
-            borderLeft: BORDER_STYLE,
-            display: 'flex',
-            flexDirection: 'column',
-            p: 0.5,
-            pt: 3,
-            alignItems: 'center',
-            backgroundColor: COLORS.background,
-            flexShrink: 0,
-          }}>
-            <Stack spacing={2} alignItems="center">
-              {/* Mode buttons */}
-              <Tooltip title={editorMode === 'select' ? 'Select Mode (active)' : 'Select Mode'} placement="left">
-                <IconButton 
-                  size="small" 
-                  sx={{ 
-                    color: editorMode === 'select' ? '#1976d2' : COLORS.iconColor,
-                    backgroundColor: editorMode === 'select' ? 'rgba(25, 118, 210, 0.1)' : 'transparent',
-                    '&:hover': {
-                      backgroundColor: editorMode === 'select' ? 'rgba(25, 118, 210, 0.2)' : 'rgba(0, 0, 0, 0.04)'
-                    }
-                  }}
-                  onClick={() => setEditorMode('select')}
-                >
-                  <MouseOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              
-              {/* Add Node button - opens node type tray */}
-              <Tooltip title={editorMode === 'addNode' ? 'Add Node Mode (active)' : 'Add Node'} placement="left">
-                <IconButton 
-                  size="small" 
-                  sx={{ 
-                    color: editorMode === 'addNode' ? '#1976d2' : COLORS.iconColor,
-                    backgroundColor: editorMode === 'addNode' ? 'rgba(25, 118, 210, 0.1)' : 'transparent',
-                    '&:hover': {
-                      backgroundColor: editorMode === 'addNode' ? 'rgba(25, 118, 210, 0.2)' : 'rgba(0, 0, 0, 0.04)'
-                    }
-                  }}
-                  onClick={() => {
-                    if (editorMode === 'addNode') {
-                      // If already in add node mode, switch to select mode
-                      setEditorMode('select');
-                      setNodeTypeTrayOpen(false);
-                    } else {
-                      // Switch to add node mode and open tray
-                      setEditorMode('addNode');
-                      setNodeTypeTrayOpen(true);
-                    }
-                  }}
-                >
-                  <AddOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              
-              {/* Add Connection button */}
-              <Tooltip title="Add Connection" placement="left">
-                <IconButton 
-                  size="small" 
-                  disabled={editorMode !== 'select'} 
-                  sx={{ 
-                    color: COLORS.iconColor,
-                    opacity: editorMode !== 'select' ? 0.5 : 1
-                  }}
-                >
-                  <CableOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              
-              <Divider sx={{ width: '70%', my: 0.5 }} />
-              
-              {/* Duplicate */}
-              <Tooltip title="Duplicate" placement="left">
-                <IconButton 
-                  size="small" 
-                  disabled={editorMode !== 'select'} 
-                  sx={{ 
-                    color: COLORS.iconColor,
-                    opacity: editorMode !== 'select' ? 0.5 : 1
-                  }}
-                >
-                  <ContentCopyOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              
-              {/* Delete */}
-              <Tooltip title="Delete" placement="left">
-                <IconButton 
-                  size="small" 
-                  disabled={editorMode !== 'select'} 
-                  sx={{ 
-                    color: COLORS.iconColor,
-                    opacity: editorMode !== 'select' ? 0.5 : 1
-                  }}
-                  onClick={deleteSelectedNode}
-                >
-                  <DeleteOutlineOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Stack>
-            
-            {/* Node Type Tray */}
-            <NodeTypeTray 
-              open={nodeTypeTrayOpen} 
-              onClose={() => setNodeTypeTrayOpen(false)}
-              onSelectNodeType={(type) => {
-                setActiveNodeType(type);
-                setNodeTypeTrayOpen(false);
-              }}
-            />
-          </Box>
+              />
+            </Box>
+          )}
         </Box>
       </Box>
 

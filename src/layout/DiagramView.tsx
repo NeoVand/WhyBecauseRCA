@@ -26,10 +26,11 @@ const getViewColors = (isDarkMode: boolean) => {
 interface DiagramViewProps {
   activeNodeType: NodeType | null;
   isSelectMode: boolean;
+  isPanMode: boolean;
   onNodeAdded: () => void;
 }
 
-export function DiagramView({ activeNodeType, isSelectMode, onNodeAdded }: DiagramViewProps) {
+export function DiagramView({ activeNodeType, isSelectMode, isPanMode, onNodeAdded }: DiagramViewProps) {
   const { isDarkMode } = useTheme();
   const { currentProject } = useProject();
   const COLORS = getViewColors(isDarkMode);
@@ -38,7 +39,24 @@ export function DiagramView({ activeNodeType, isSelectMode, onNodeAdded }: Diagr
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   
+  // Panning state
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef({ x: 0, y: 0 });
+  // Store diagram viewport position rather than scroll
+  const [diagramPosition, setDiagramPosition] = useState({ x: 0, y: 0 });
+  
   const diagramRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  
+  // Update data attribute when pan mode changes
+  useEffect(() => {
+    if (diagramRef.current) {
+      diagramRef.current.setAttribute('data-pan-mode', isPanMode ? 'true' : 'false');
+      
+      // Force the cursor style directly
+      diagramRef.current.style.cursor = isPanMode ? 'grab' : (isSelectMode ? 'default' : 'crosshair');
+    }
+  }, [isPanMode, isSelectMode]);
   
   // Load nodes on component mount and when project changes
   useEffect(() => {
@@ -70,29 +88,101 @@ export function DiagramView({ activeNodeType, isSelectMode, onNodeAdded }: Diagr
     };
   }, [currentProject]);
   
+  // Setup global handlers for panning
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isPanning) return;
+      
+      // Calculate movement
+      const deltaX = e.clientX - panStartRef.current.x;
+      const deltaY = e.clientY - panStartRef.current.y;
+      
+      // Update the diagram position (move in the direction of mouse movement)
+      setDiagramPosition(prev => ({
+        x: prev.x + deltaX,
+        y: prev.y + deltaY
+      }));
+      
+      // Update the reference point for next move
+      panStartRef.current = { x: e.clientX, y: e.clientY };
+    };
+    
+    const onMouseUp = () => {
+      if (isPanning) {
+        setIsPanning(false);
+        
+        // Reset cursor
+        if (diagramRef.current && isPanMode) {
+          diagramRef.current.style.cursor = 'grab';
+        }
+      }
+    };
+    
+    if (isPanning) {
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+      
+      return () => {
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+      };
+    }
+  }, [isPanning, isPanMode, diagramPosition]);
+  
+  // Handle mouse down for panning
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Make sure panning is only activated in pan mode
+    if (!isPanMode) return;
+    
+    // If we're clicking directly on a node, don't initiate panning from here
+    const isNodeClick = (e.target as HTMLElement).closest('.node-item') !== null;
+    
+    // Only proceed if we're clicking on the diagram background (not a node)
+    if (isNodeClick) return;
+    
+    // Prevent default behavior
+    e.preventDefault();
+    
+    // Store starting position
+    panStartRef.current = { x: e.clientX, y: e.clientY };
+    
+    // Set cursor to grabbing
+    if (diagramRef.current) {
+      diagramRef.current.style.cursor = 'grabbing';
+    }
+    
+    setIsPanning(true);
+  };
+  
   // Handle click on the diagram background
   const handleDiagramClick = async (e: React.MouseEvent<HTMLDivElement>) => {
-    // Check if the click is directly on the diagram, not on a child element
-    if (e.target !== e.currentTarget) return;
+    // If we're panning or the click isn't directly on the content box, ignore
+    if (isPanning) return;
     
-    // Don't create node if in select mode or dragging
-    if (isSelectMode || isDragging || !activeNodeType || !currentProject) {
-      // Clear selection if clicking on background in select mode
-      if (isSelectMode && !isDragging) {
+    // Only process clicks directly on the diagram content (not on nodes)
+    // Check if contentRef contains the target and it's not a node
+    const isContentClick = contentRef.current?.contains(e.target as Node) && 
+                         !(e.target as HTMLElement).closest('.node-item');
+    
+    if (!isContentClick) return;
+    
+    // Don't create nodes when in select/pan mode or if dragging
+    if (isSelectMode || isPanMode || isDragging || !activeNodeType || !currentProject) {
+      // Clear selection if in select mode and clicking background
+      if (isSelectMode && !isDragging && !isPanMode) {
         setSelectedNodeId(null);
       }
       return;
     }
     
-    // Get click position relative to the diagram, with scroll offset
-    const diagramRect = diagramRef.current?.getBoundingClientRect();
-    if (!diagramRect) return;
+    // Get click position relative to the content container, accounting for the translation
+    const contentRect = contentRef.current?.getBoundingClientRect();
+    if (!contentRect) return;
     
-    const scrollLeft = diagramRef.current?.scrollLeft || 0;
-    const scrollTop = diagramRef.current?.scrollTop || 0;
-    
-    const x = e.clientX - diagramRect.left + scrollLeft;
-    const y = e.clientY - diagramRect.top + scrollTop;
+    // Calculate position in the diagram's coordinate system
+    // We need to account for the current transform/translation
+    const x = e.clientX - contentRect.left - diagramPosition.x;
+    const y = e.clientY - contentRect.top - diagramPosition.y;
     
     try {
       // Create a new node at the clicked position
@@ -119,9 +209,6 @@ export function DiagramView({ activeNodeType, isSelectMode, onNodeAdded }: Diagr
       
       // Even on error, switch to select mode as feedback to user that their click was processed
       onNodeAdded();
-      
-      // Show an error notification (implement this in the future if needed)
-      // For now, just log to console
     }
   };
   
@@ -162,68 +249,92 @@ export function DiagramView({ activeNodeType, isSelectMode, onNodeAdded }: Diagr
     <Box 
       ref={diagramRef}
       id="diagram-container"
+      data-pan-mode={isPanMode ? 'true' : 'false'}
       sx={{ 
         height: '100%', 
         width: '100%',
         position: 'relative',
-        backgroundImage: `
-          radial-gradient(${COLORS.gridDot} 1px, transparent 1px),
-          radial-gradient(${COLORS.gridDot} 1px, transparent 1px)
-        `,
-        backgroundSize: '20px 20px',
+        overflow: 'hidden', // Change to hidden so we can control positioning
         backgroundColor: COLORS.diagramBg,
-        overflow: 'auto',
-        flexGrow: 1,
-        cursor: isSelectMode ? 'default' : 'crosshair',
+        userSelect: 'none', // Prevent text selection during panning
       }}
       onClick={handleDiagramClick}
+      onMouseDown={handleMouseDown}
     >
-      {/* Render nodes */}
-      {nodes.map(node => (
-        <NodeItem
-          key={node.id}
-          node={node}
-          isSelected={node.id === selectedNodeId}
-          onSelect={handleNodeSelect}
-          onDragStart={() => setIsDragging(true)}
-          onDragEnd={() => {
-            // Delay to avoid triggering click
-            setTimeout(() => setIsDragging(false), 100);
-          }}
-        />
-      ))}
-      
-      {/* Empty state / placeholder (show only when no nodes) */}
-      {nodes.length === 0 && (
-        <Box 
-          sx={{ 
-            height: '100%',
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            opacity: 0.7,
-            pointerEvents: 'none', // Allow clicks to pass through to background
-          }}
-        >
-          <AccountTreeOutlinedIcon 
-            sx={{ 
-              fontSize: 64,
-              color: COLORS.lightText,
-              mb: 2
-            }} 
+      {/* Content container that can be moved for panning */}
+      <Box
+        ref={contentRef}
+        sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '3000px',  // Make this larger than viewport to ensure we can pan
+          height: '3000px', // Make this larger than viewport to ensure we can pan
+          transform: `translate(${diagramPosition.x}px, ${diagramPosition.y}px)`,
+          backgroundImage: `
+            radial-gradient(${COLORS.gridDot} 1px, transparent 1px),
+            radial-gradient(${COLORS.gridDot} 1px, transparent 1px)
+          `,
+          backgroundSize: '20px 20px',
+          // Use will-change for better performance during transformations
+          willChange: 'transform',
+        }}
+      >
+        {/* Nodes */}
+        {nodes.map(node => (
+          <NodeItem
+            key={node.id}
+            node={{
+              ...node,
+              // Adjust node position based on diagram position (for proper rendering)
+              x: node.x,
+              y: node.y,
+            }}
+            isSelected={node.id === selectedNodeId}
+            onSelect={handleNodeSelect}
+            onDragStart={() => setIsDragging(true)}
+            onDragEnd={() => {
+              // Delay to avoid triggering click
+              setTimeout(() => setIsDragging(false), 100);
+            }}
+            className="node-item"
           />
-          <Typography variant="h6" sx={{ color: COLORS.lightText }}>
-            Your RCA diagram will appear here
-          </Typography>
-          <Typography variant="body2" sx={{ color: COLORS.lightText, mt: 1 }}>
-            {isSelectMode 
-              ? 'Use the toolbar to add nodes and connections' 
-              : `Click anywhere to add a ${activeNodeType || 'node'}`}
-          </Typography>
-        </Box>
-      )}
+        ))}
+        
+        {/* Empty state / placeholder (show only when no nodes) */}
+        {nodes.length === 0 && (
+          <Box 
+            sx={{ 
+              position: 'fixed', // Fix to viewport
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: 0.7,
+              pointerEvents: 'none', // Allow clicks to pass through to background
+            }}
+          >
+            <AccountTreeOutlinedIcon 
+              sx={{ 
+                fontSize: 64,
+                color: COLORS.lightText,
+                mb: 2
+              }} 
+            />
+            <Typography variant="h6" sx={{ color: COLORS.lightText }}>
+              Your RCA diagram will appear here
+            </Typography>
+            <Typography variant="body2" sx={{ color: COLORS.lightText, mt: 1 }}>
+              {isSelectMode 
+                ? 'Use the toolbar to add nodes and connections' 
+                : `Click anywhere to add a ${activeNodeType || 'node'}`}
+            </Typography>
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 } 
