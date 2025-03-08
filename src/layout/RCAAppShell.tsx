@@ -114,7 +114,7 @@ export function RCAAppShell() {
   
   // Context
   const { currentUser, setCurrentUser } = useUser();
-  const { currentProject, userProjects, refreshProjects } = useProject();
+  const { currentProject, userProjects, refreshProjects, loading } = useProject();
   
   // Resizable drawer
   const [isResizing, setIsResizing] = useState(false);
@@ -217,11 +217,22 @@ export function RCAAppShell() {
 
   // Check if we need to open NewProjectDialog automatically
   useEffect(() => {
-    if (currentUser && userProjects.length === 0) {
-      // If user is logged in but has no projects, show the create project dialog
-      setNewProjectDialogOpen(true);
+    // Only show the New Project dialog if:
+    // 1. User is logged in
+    // 2. User has no projects
+    // 3. We have already loaded projects (not just initializing)
+    // 4. We're not still loading the user
+    if (currentUser && 
+        userProjects.length === 0 && 
+        !loading) {
+      // Add a slight delay to make sure it doesn't conflict with the sign-in dialog
+      const timer = setTimeout(() => {
+        setNewProjectDialogOpen(true);
+      }, 300);
+      
+      return () => clearTimeout(timer);
     }
-  }, [currentUser, userProjects.length]);
+  }, [currentUser, userProjects.length, loading]);
 
   // Refresh projects when user changes
   useEffect(() => {

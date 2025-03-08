@@ -5,7 +5,8 @@ import {
   DialogContent, 
   DialogActions, 
   TextField, 
-  Button
+  Button,
+  backdropClasses
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -87,7 +88,16 @@ export function NewProjectDialog({ open, onClose }: NewProjectDialogProps) {
       PaperProps={{
         sx: {
           borderRadius: 2,
-          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)'
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+          backdropFilter: 'blur(2px)',
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          border: '1px solid rgba(255, 255, 255, 0.8)'
+        }
+      }}
+      sx={{
+        [`& .${backdropClasses.root}`]: {
+          backdropFilter: 'blur(8px)',
+          backgroundColor: 'rgba(0, 0, 0, 0.2)'
         }
       }}
     >
@@ -115,7 +125,8 @@ export function NewProjectDialog({ open, onClose }: NewProjectDialogProps) {
             '& .MuiOutlinedInput-root': {
               '&.Mui-focused fieldset': {
                 borderColor: COLORS.activeInput
-              }
+              },
+              backgroundColor: 'rgba(255, 255, 255, 0.7)'
             },
             '& .MuiInputLabel-root.Mui-focused': {
               color: COLORS.activeInput
@@ -139,7 +150,8 @@ export function NewProjectDialog({ open, onClose }: NewProjectDialogProps) {
             '& .MuiOutlinedInput-root': {
               '&.Mui-focused fieldset': {
                 borderColor: COLORS.activeInput
-              }
+              },
+              backgroundColor: 'rgba(255, 255, 255, 0.7)'
             },
             '& .MuiInputLabel-root.Mui-focused': {
               color: COLORS.activeInput

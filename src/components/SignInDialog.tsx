@@ -7,7 +7,8 @@ import {
   Box,
   Typography,
   InputAdornment,
-  IconButton
+  IconButton,
+  backdropClasses
 } from '@mui/material';
 import { Visibility, VisibilityOff, Login as LoginIcon } from '@mui/icons-material';
 import { db } from '../db/LocalDB';
@@ -29,9 +30,9 @@ const AppLogo = () => {
   return (
     <svg 
       xmlns="http://www.w3.org/2000/svg" 
-      height="36px" 
+      height="40px" 
       viewBox="0 -960 960 960" 
-      width="36px" 
+      width="40px" 
       fill="currentColor"
       style={{ 
         color: COLORS.text,
@@ -53,10 +54,12 @@ export function SignInDialog() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Show dialog when no user is logged in
+  // Show dialog when no user is logged in and loading is complete
   useEffect(() => {
     if (!loading && !currentUser) {
       setOpen(true);
+    } else {
+      setOpen(false);
     }
   }, [currentUser, loading]);
 
@@ -113,7 +116,16 @@ export function SignInDialog() {
       PaperProps={{
         sx: {
           borderRadius: 2,
-          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)'
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+          backdropFilter: 'blur(2px)',
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          border: '1px solid rgba(255, 255, 255, 0.8)'
+        }
+      }}
+      sx={{
+        [`& .${backdropClasses.root}`]: {
+          backdropFilter: 'blur(8px)',
+          backgroundColor: 'rgba(0, 0, 0, 0.2)'
         }
       }}
     >
@@ -127,25 +139,25 @@ export function SignInDialog() {
           px: 3
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            mb: 3 
+          }}
+        >
           <AppLogo />
-        </Box>
-        
-        <Box sx={{ 
-          display: 'flex', 
-          alignItems: 'center',
-          justifyContent: 'center', 
-          mb: 3 
-        }}>
           <Typography 
-            variant="h4" 
-            component="div"
+            variant="h6" 
+            component="div" 
+            noWrap
             sx={{ 
-              fontWeight: 500,
               display: 'flex', 
-              fontSize: '1.75rem',
-              letterSpacing: '-0.01em', 
-              mt: 2
+              alignItems: 'center',
+              fontWeight: 'bold',
+              fontSize: '1.8rem',
+              ml: 1.5,
+              flexShrink: 0,
             }}
           >
             <Box component="span" sx={{ color: COLORS.text }}>Why</Box>
@@ -179,7 +191,14 @@ export function SignInDialog() {
           sx={{ 
             mb: 2,
             '& .MuiOutlinedInput-root': {
-              borderRadius: 1.5
+              borderRadius: 1.5,
+              '&.Mui-focused fieldset': {
+                borderColor: COLORS.text
+              },
+              backgroundColor: 'rgba(255, 255, 255, 0.7)'
+            },
+            '& .MuiInputLabel-root.Mui-focused': {
+              color: COLORS.text
             }
           }}
         />
@@ -193,7 +212,14 @@ export function SignInDialog() {
           sx={{ 
             mb: 3,
             '& .MuiOutlinedInput-root': {
-              borderRadius: 1.5
+              borderRadius: 1.5,
+              '&.Mui-focused fieldset': {
+                borderColor: COLORS.text
+              },
+              backgroundColor: 'rgba(255, 255, 255, 0.7)'
+            },
+            '& .MuiInputLabel-root.Mui-focused': {
+              color: COLORS.text
             }
           }}
           InputProps={{
