@@ -43,6 +43,10 @@ import { AISettings } from './AISettings';
 import { DiagramView } from './DiagramView';
 import { ReportView } from './ReportView';
 import { SummaryView } from './SummaryView';
+import { NewProjectDialog } from '../components/NewProjectDialog';
+import { LoadProjectDialog } from '../components/LoadProjectDialog';
+import { useProject } from '../contexts/ProjectContext';
+import { useUser } from '../contexts/UserContext';
 
 // Default drawer width and minimum width
 const DEFAULT_DRAWER_WIDTH = 300;
@@ -91,8 +95,15 @@ export function RCAAppShell() {
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(true);
   const [leftTabIndex, setLeftTabIndex] = useState(0);
   const [mainTabIndex, setMainTabIndex] = useState(0);
-  const [projectName] = useState('New Project');
   const [drawerWidth, setDrawerWidth] = useState(DEFAULT_DRAWER_WIDTH);
+  
+  // Project dialogs
+  const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
+  const [loadProjectDialogOpen, setLoadProjectDialogOpen] = useState(false);
+  
+  // Context
+  const { currentUser } = useUser();
+  const { currentProject, userProjects, refreshProjects } = useProject();
   
   // Resizable drawer
   const [isResizing, setIsResizing] = useState(false);
@@ -192,6 +203,21 @@ export function RCAAppShell() {
     e.preventDefault();
     setIsResizing(true);
   };
+
+  // Check if we need to open NewProjectDialog automatically
+  useEffect(() => {
+    if (currentUser && userProjects.length === 0) {
+      // If user is logged in but has no projects, show the create project dialog
+      setNewProjectDialogOpen(true);
+    }
+  }, [currentUser, userProjects.length]);
+
+  // Refresh projects when user changes
+  useEffect(() => {
+    if (currentUser) {
+      refreshProjects();
+    }
+  }, [currentUser, refreshProjects]);
 
   return (
     <Box sx={{ 
@@ -398,6 +424,56 @@ export function RCAAppShell() {
 
           <Box sx={{ flexGrow: 1 }} />
 
+          {/* Spacer element that pushes the center title to be centered */}
+          <Box sx={{ flexGrow: 1 }} />
+
+          {/* Center content with app name and/or project name */}
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <Typography 
+              variant="subtitle1" 
+              component="div" 
+              sx={{ 
+                fontWeight: 'medium',
+                color: COLORS.text,
+                fontSize: '0.875rem',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+            >
+              WhyBecause RCA
+              {currentProject && (
+                <>
+                  <Box 
+                    component="span" 
+                    sx={{ 
+                      mx: 1, 
+                      color: COLORS.inactiveTab,
+                      fontSize: '1rem'
+                    }}
+                  >
+                    •
+                  </Box>
+                  <Box 
+                    component="span" 
+                    sx={{ 
+                      color: COLORS.text,
+                      fontWeight: 'normal'
+                    }}
+                  >
+                    {currentProject.name}
+                  </Box>
+                </>
+              )}
+            </Typography>
+          </Box>
+
+          {/* Spacer element for symmetry */}
+          <Box sx={{ flexGrow: 1 }} />
+
           {/* Right side of toolbar - Action buttons */}
           <Box sx={{ 
             display: 'flex', 
@@ -417,12 +493,20 @@ export function RCAAppShell() {
             </Tooltip>
 
             <Tooltip title="New Project">
-              <IconButton size="small" sx={{ color: COLORS.iconColor }}>
+              <IconButton 
+                size="small" 
+                sx={{ color: COLORS.iconColor }}
+                onClick={() => setNewProjectDialogOpen(true)}
+              >
                 <CreateNewFolderOutlinedIcon fontSize="small" />
               </IconButton>
             </Tooltip>
             <Tooltip title="Open Project">
-              <IconButton size="small" sx={{ color: COLORS.iconColor }}>
+              <IconButton 
+                size="small" 
+                sx={{ color: COLORS.iconColor }}
+                onClick={() => setLoadProjectDialogOpen(true)}
+              >
                 <FolderOpenOutlinedIcon fontSize="small" />
               </IconButton>
             </Tooltip>
@@ -561,21 +645,6 @@ export function RCAAppShell() {
             position: 'relative',
             overflow: 'auto',
           }}>
-            {/* Project name - positioned in top right corner of the diagram */}
-            <Typography 
-              variant="h6" 
-              sx={{ 
-                position: 'absolute', 
-                top: 16, 
-                right: 16, 
-                zIndex: 10,
-                color: COLORS.lightText,
-                fontWeight: 'normal',
-              }}
-            >
-              {projectName}
-            </Typography>
-
             {/* Main view content */}
             {mainTabIndex === 0 && <DiagramView />}
             {mainTabIndex === 1 && <ReportView />}
@@ -652,6 +721,16 @@ export function RCAAppShell() {
           </Box>
         </Box>
       </Box>
+
+      {/* Project Dialogs */}
+      <NewProjectDialog 
+        open={newProjectDialogOpen} 
+        onClose={() => setNewProjectDialogOpen(false)} 
+      />
+      <LoadProjectDialog 
+        open={loadProjectDialogOpen} 
+        onClose={() => setLoadProjectDialogOpen(false)} 
+      />
     </Box>
   );
 } 
