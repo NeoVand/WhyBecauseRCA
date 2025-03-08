@@ -1,18 +1,25 @@
 import { Box, Typography, Paper } from '@mui/material';
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
+import { useTheme } from '../contexts/ThemeContext';
 
-// Custom colors based on the design screenshot
-const COLORS = {
-  activeTab: '#666666',       // Darker gray for active tab
-  inactiveTab: '#bbbbbb',     // Lighter gray for inactive tab
-  iconColor: '#999999',       // Icon color
-  text: '#666666',            // Text color
-  lightText: '#999999',       // Light text color
-  background: '#ffffff',      // White background
-  border: 'rgba(0, 0, 0, 0.12)' // Border color
+// Function to get colors based on current theme
+const getViewColors = (isDarkMode: boolean) => {
+  return {
+    activeTab: isDarkMode ? '#e0e0e0' : '#666666',              // Active tab color
+    inactiveTab: isDarkMode ? '#777777' : '#bbbbbb',            // Inactive tab color
+    iconColor: isDarkMode ? '#b0b0b0' : '#999999',              // Icon color
+    text: isDarkMode ? '#e0e0e0' : '#666666',                   // Text color
+    lightText: isDarkMode ? '#a0a0a0' : '#999999',              // Light text color
+    background: isDarkMode ? '#1e1e1e' : '#ffffff',             // Background color
+    border: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)', // Border color
+    paperBg: isDarkMode ? 'rgba(45, 45, 45, 0.8)' : 'rgba(255, 255, 255, 0.9)' // Paper background
+  };
 };
 
 export function ReportView() {
+  const { isDarkMode } = useTheme();
+  const COLORS = getViewColors(isDarkMode);
+
   return (
     <Box 
       sx={{ 
@@ -43,7 +50,7 @@ export function ReportView() {
             alignItems: 'center',
             border: `1px dashed ${COLORS.border}`,
             borderRadius: 1,
-            backgroundColor: 'rgba(255,255,255,0.9)',
+            backgroundColor: COLORS.paperBg,
             maxWidth: 500,
           }}
         >
@@ -52,9 +59,9 @@ export function ReportView() {
             Report View
           </Typography>
           <Typography variant="body2" sx={{ color: COLORS.lightText, textAlign: 'center' }}>
-            This is where the detailed RCA report will be displayed.
+            This view will generate a structured report based on your diagram.
             <br />
-            The report will include all nodes, connections, and analysis.
+            You can export the report in different formats.
           </Typography>
         </Paper>
       </Box>

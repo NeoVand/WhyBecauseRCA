@@ -1,19 +1,26 @@
-import { Box, Typography, Paper } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
+import { useTheme } from '../contexts/ThemeContext';
 
-// Custom colors based on the design screenshot
-const COLORS = {
-  activeTab: '#666666',       // Darker gray for active tab
-  inactiveTab: '#bbbbbb',     // Lighter gray for inactive tab
-  iconColor: '#999999',       // Icon color
-  text: '#666666',            // Text color
-  lightText: '#999999',       // Light text color
-  background: '#ffffff',      // White background
-  border: 'rgba(0, 0, 0, 0.12)', // Border color
-  gridDot: 'rgba(0, 0, 0, 0.05)' // Very light dots for grid
+// Function to get colors based on current theme
+const getViewColors = (isDarkMode: boolean) => {
+  return {
+    activeTab: isDarkMode ? '#e0e0e0' : '#666666',              // Active tab color
+    inactiveTab: isDarkMode ? '#777777' : '#bbbbbb',            // Inactive tab color
+    iconColor: isDarkMode ? '#b0b0b0' : '#999999',              // Icon color
+    text: isDarkMode ? '#e0e0e0' : '#666666',                   // Text color
+    lightText: isDarkMode ? '#a0a0a0' : '#999999',              // Light text color
+    background: isDarkMode ? '#1e1e1e' : '#ffffff',             // Background color
+    border: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)', // Border color
+    gridDot: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)', // Grid dots
+    diagramBg: isDarkMode ? '#121212' : '#ffffff'               // Diagram background
+  };
 };
 
 export function DiagramView() {
+  const { isDarkMode } = useTheme();
+  const COLORS = getViewColors(isDarkMode);
+
   return (
     <Box 
       sx={{ 
@@ -25,44 +32,36 @@ export function DiagramView() {
           radial-gradient(${COLORS.gridDot} 1px, transparent 1px)
         `,
         backgroundSize: '10px 10px',
-        backgroundColor: '#ffffff',
+        backgroundColor: COLORS.diagramBg,
         overflow: 'auto',
         flexGrow: 1,
       }}
     >
+      {/* Empty state / placeholder */}
       <Box 
         sx={{ 
           height: '100%',
           width: '100%',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          p: 2,
+          opacity: 0.7,
         }}
       >
-        <Paper 
-          elevation={0} 
+        <AccountTreeOutlinedIcon 
           sx={{ 
-            p: 4, 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'center',
-            border: `1px dashed ${COLORS.border}`,
-            borderRadius: 1,
-            backgroundColor: 'rgba(255,255,255,0.9)',
-            maxWidth: 500,
-          }}
-        >
-          <AccountTreeOutlinedIcon sx={{ fontSize: 48, color: COLORS.iconColor, mb: 2, opacity: 0.6 }} />
-          <Typography variant="h6" sx={{ color: COLORS.text, mb: 1 }}>
-            Diagram View
-          </Typography>
-          <Typography variant="body2" sx={{ color: COLORS.lightText, textAlign: 'center' }}>
-            This is where the Why-Because Graph will be displayed.
-            <br />
-            You'll be able to create and connect nodes to form a causal diagram.
-          </Typography>
-        </Paper>
+            fontSize: 64,
+            color: COLORS.lightText,
+            mb: 2
+          }} 
+        />
+        <Typography variant="h6" sx={{ color: COLORS.lightText }}>
+          Your RCA diagram will appear here
+        </Typography>
+        <Typography variant="body2" sx={{ color: COLORS.lightText, mt: 1 }}>
+          Use the toolbar to add nodes and connections
+        </Typography>
       </Box>
     </Box>
   );

@@ -31,18 +31,19 @@ import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined';
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
+import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
 import ZoomInOutlinedIcon from '@mui/icons-material/ZoomInOutlined';
 import ZoomOutOutlinedIcon from '@mui/icons-material/ZoomOutOutlined';
 import PanToolOutlinedIcon from '@mui/icons-material/PanToolOutlined';
-import GridOnOutlinedIcon from '@mui/icons-material/GridOnOutlined';
-import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
-import CableOutlinedIcon from '@mui/icons-material/CableOutlined'; // Cable icon for connections
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import SummarizeOutlinedIcon from '@mui/icons-material/SummarizeOutlined';
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
 import CodeIcon from '@mui/icons-material/Code';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import CropFreeOutlinedIcon from '@mui/icons-material/CropFreeOutlined';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
+import CableOutlinedIcon from '@mui/icons-material/CableOutlined'; // Cable icon for connections
 
 // Import components
 import { ProjectSettings } from './ProjectSettings';
@@ -54,6 +55,7 @@ import { NewProjectDialog } from '../components/NewProjectDialog';
 import { LoadProjectDialog } from '../components/LoadProjectDialog';
 import { useProject } from '../contexts/ProjectContext';
 import { useUser } from '../contexts/UserContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 // Default drawer width and minimum width
 const DEFAULT_DRAWER_WIDTH = 300;
@@ -62,22 +64,30 @@ const HEADER_HEIGHT = 44; // Slightly reduce header height
 const LOGO_SECTION_WIDTH = 180; // Width for logo + toggle when sidebar is collapsed
 const RIGHT_TOOLBAR_WIDTH = 48; // Matching navbar height for consistency
 
-// Common border style for consistency
-const BORDER_STYLE = '1px solid rgba(0, 0, 0, 0.12)';
+// Function to get colors based on current theme
+const getThemeColors = (isDarkMode: boolean) => {
+  return {
+    activeTab: isDarkMode ? '#e0e0e0' : '#666666',         // Active tab color
+    inactiveTab: isDarkMode ? '#777777' : '#bbbbbb',       // Inactive tab color
+    iconColor: isDarkMode ? '#b0b0b0' : '#999999',         // Icon color
+    text: isDarkMode ? '#e0e0e0' : '#666666',              // Text color
+    lightText: isDarkMode ? '#a0a0a0' : '#999999',         // Light text color
+    background: isDarkMode ? '#1e1e1e' : '#ffffff',        // Background color
+    mainBackground: isDarkMode ? '#121212' : '#fafafa',    // Main background
+    headerBackground: isDarkMode ? '#1e1e1e' : '#ffffff',  // Header background
+    sidebarBackground: isDarkMode ? '#1e1e1e' : '#ffffff', // Sidebar background
+    border: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)', // Border color
+    divider: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)' // Divider color
+  };
+};
 
-// Custom colors based on the design screenshot
-const COLORS = {
-  activeTab: '#666666',       // Darker gray for active tab
-  inactiveTab: '#bbbbbb',     // Lighter gray for inactive tab
-  iconColor: '#999999',       // Icon color
-  text: '#666666',            // Text color
-  lightText: '#999999',       // Light text color
-  background: '#ffffff',      // White background
-  border: 'rgba(0, 0, 0, 0.12)' // Border color
+// Function to get border style based on theme
+const getBorderStyle = (isDarkMode: boolean) => {
+  return `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`;
 };
 
 // Create a custom AltRouteRotated component to display the icon correctly
-const AltRouteRotated = () => {
+const AltRouteRotated = ({ iconColor }: { iconColor: string }) => {
   return (
     <svg 
       xmlns="http://www.w3.org/2000/svg" 
@@ -86,7 +96,7 @@ const AltRouteRotated = () => {
       width="20px" 
       fill="currentColor"
       style={{ 
-        color: COLORS.iconColor,
+        color: iconColor,
         flexShrink: 0 
       }}
     >
@@ -124,6 +134,13 @@ export function RCAAppShell() {
 
   // Common transition settings for synchronized animations (only for toggle, not for resize)
   const transitionCSS = 'width 225ms cubic-bezier(0.4, 0, 0.2, 1)';
+
+  // Add theme context
+  const { isDarkMode, toggleTheme } = useTheme();
+  
+  // Get theme-specific colors and border style
+  const COLORS = getThemeColors(isDarkMode);
+  const BORDER_STYLE = getBorderStyle(isDarkMode);
 
   // Apply element widths after React state changes or DOM manipulation
   const updateElementWidths = (open: boolean, width: number) => {
@@ -305,7 +322,7 @@ export function RCAAppShell() {
                 boxSizing: 'border-box',
               }}
             >
-              <AltRouteRotated />
+              <AltRouteRotated iconColor={COLORS.iconColor} />
               
               <Typography 
                 variant="h6" 
@@ -362,7 +379,7 @@ export function RCAAppShell() {
                   height: '100%',
                 }}
               >
-                <AltRouteRotated />
+                <AltRouteRotated iconColor={COLORS.iconColor} />
                 
                 <Typography 
                   variant="h6" 
@@ -458,58 +475,26 @@ export function RCAAppShell() {
                 label="Summary" 
               />
             </Tabs>
-          </Box>
-
-          <Box sx={{ flexGrow: 1 }} />
-
-          {/* Spacer element that pushes the center title to be centered */}
-          <Box sx={{ flexGrow: 1 }} />
-
-          {/* Center content with app name and/or project name */}
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
+            
+            {/* Project name to the right of the tabs */}
             <Typography 
               variant="subtitle1" 
               component="div" 
               sx={{ 
-                fontWeight: 'medium',
                 color: COLORS.text,
-                fontSize: '0.875rem',
-                display: 'flex',
-                alignItems: 'center'
+                fontSize: '1rem',
+                fontWeight: 'medium',
+                ml: 3,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '200px'
               }}
             >
-              WhyBecause RCA
-              {currentProject && (
-                <>
-                  <Box 
-                    component="span" 
-                    sx={{ 
-                      mx: 1, 
-                      color: COLORS.inactiveTab,
-                      fontSize: '1rem'
-                    }}
-                  >
-                    •
-                  </Box>
-                  <Box 
-                    component="span" 
-                    sx={{ 
-                      color: COLORS.text,
-                      fontWeight: 'normal'
-                    }}
-                  >
-                    {currentProject.name}
-                  </Box>
-                </>
-              )}
+              {currentProject ? currentProject.name : 'No Project Selected'}
             </Typography>
           </Box>
 
-          {/* Spacer element for symmetry */}
           <Box sx={{ flexGrow: 1 }} />
 
           {/* Right side of toolbar - Action buttons */}
@@ -554,9 +539,13 @@ export function RCAAppShell() {
               </IconButton>
             </Tooltip>
 
-            <Tooltip title="Toggle Theme">
-              <IconButton size="small" sx={{ color: COLORS.iconColor }}>
-                <DarkModeOutlinedIcon fontSize="small" />
+            <Tooltip title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}>
+              <IconButton 
+                size="small" 
+                sx={{ color: COLORS.iconColor }}
+                onClick={toggleTheme}
+              >
+                {isDarkMode ? <LightModeOutlinedIcon fontSize="small" /> : <DarkModeOutlinedIcon fontSize="small" />}
               </IconButton>
             </Tooltip>
             <Tooltip title="Settings">
@@ -698,7 +687,7 @@ export function RCAAppShell() {
             {/* View Controls (only in diagram view) */}
             {mainTabIndex === 0 && (
               <Paper
-                elevation={1}
+                elevation={2}
                 sx={{
                   position: 'absolute',
                   bottom: 16,
@@ -708,7 +697,8 @@ export function RCAAppShell() {
                   alignItems: 'center',
                   p: 0.5,
                   borderRadius: 8,
-                  backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                  backgroundColor: isDarkMode ? 'rgba(24, 24, 24, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+                  border: `1px solid ${COLORS.border}`,
                   zIndex: 1000,
                 }}
               >
@@ -718,12 +708,11 @@ export function RCAAppShell() {
                 <IconButton size="small" sx={{ mx: 0.5, color: COLORS.iconColor }}>
                   <ZoomOutOutlinedIcon fontSize="small" />
                 </IconButton>
-                <Divider orientation="vertical" flexItem sx={{ height: 20, mx: 0.5 }} />
                 <IconButton size="small" sx={{ mx: 0.5, color: COLORS.iconColor }}>
                   <PanToolOutlinedIcon fontSize="small" />
                 </IconButton>
                 <IconButton size="small" sx={{ mx: 0.5, color: COLORS.iconColor }}>
-                  <GridOnOutlinedIcon fontSize="small" />
+                  <CropFreeOutlinedIcon fontSize="small" />
                 </IconButton>
               </Paper>
             )}

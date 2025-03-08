@@ -11,19 +11,27 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import CodeOutlinedIcon from '@mui/icons-material/CodeOutlined';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import { useState } from 'react';
+import { useTheme } from '../contexts/ThemeContext';
 
-// Custom colors based on the design screenshot
-const COLORS = {
-  activeTab: '#666666',       // Darker gray for active tab
-  inactiveTab: '#bbbbbb',     // Lighter gray for inactive tab
-  iconColor: '#999999',       // Icon color
-  text: '#666666',            // Text color
-  lightText: '#999999',       // Light text color
-  background: '#ffffff',      // White background
-  border: 'rgba(0, 0, 0, 0.12)' // Border color
+// Function to get colors based on current theme
+const getSidebarColors = (isDarkMode: boolean) => {
+  return {
+    activeTab: isDarkMode ? '#e0e0e0' : '#666666',               // Active tab color
+    inactiveTab: isDarkMode ? '#777777' : '#bbbbbb',             // Inactive tab color
+    iconColor: isDarkMode ? '#b0b0b0' : '#999999',               // Icon color
+    text: isDarkMode ? '#e0e0e0' : '#666666',                    // Text color
+    lightText: isDarkMode ? '#a0a0a0' : '#999999',               // Light text color
+    background: isDarkMode ? '#1e1e1e' : '#ffffff',              // Background color
+    border: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)', // Border color
+    hoverBg: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)', // Hover background
+    inputBg: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : '#ffffff', // Input background
+    focusBorder: isDarkMode ? '#a0a0a0' : '#666666',             // Focus border color
+  };
 };
 
 export function ProjectSettings() {
+  const { isDarkMode } = useTheme();
+  const COLORS = getSidebarColors(isDarkMode);
   const [expandedPanel, setExpandedPanel] = useState<string | false>('panel1');
 
   const handlePanelToggle = (panel: string) => {
@@ -39,7 +47,7 @@ export function ProjectSettings() {
             p: 1.5,
             cursor: 'pointer',
             '&:hover': {
-              backgroundColor: 'rgba(0, 0, 0, 0.02)'
+              backgroundColor: COLORS.hoverBg
             }
           }}
           onClick={() => handlePanelToggle('panel1')}
@@ -49,16 +57,16 @@ export function ProjectSettings() {
             <Typography sx={{ color: COLORS.text, fontWeight: 500, fontSize: '0.875rem' }}>
               Project Info
             </Typography>
+            <Box sx={{ flexGrow: 1 }} />
             {expandedPanel === 'panel1' ? (
-              <KeyboardArrowUpIcon sx={{ ml: 'auto', color: COLORS.iconColor, fontSize: 18 }} />
+              <KeyboardArrowUpIcon sx={{ color: COLORS.iconColor, fontSize: 20 }} />
             ) : (
-              <KeyboardArrowDownIcon sx={{ ml: 'auto', color: COLORS.iconColor, fontSize: 18 }} />
+              <KeyboardArrowDownIcon sx={{ color: COLORS.iconColor, fontSize: 20 }} />
             )}
           </Box>
         </Box>
-        
         <Collapse in={expandedPanel === 'panel1'}>
-          <Box sx={{ p: 1.5 }}>
+          <Box sx={{ p: 1.5, pt: 0 }}>
             <Box sx={{ mb: 1.5 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <Typography 
@@ -90,6 +98,19 @@ export function ProjectSettings() {
                     '&:hover fieldset': {
                       borderColor: COLORS.border,
                     },
+                    '&.Mui-focused fieldset': {
+                      borderColor: COLORS.focusBorder,
+                    },
+                    backgroundColor: COLORS.inputBg,
+                  },
+                  '& .MuiInputBase-input': {
+                    color: COLORS.text,
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: COLORS.lightText,
+                  },
+                  '& .MuiInputLabel-root.Mui-focused': {
+                    color: COLORS.focusBorder,
                   },
                 }}
               />
@@ -114,11 +135,11 @@ export function ProjectSettings() {
               </Box>
               <TextField
                 fullWidth
-                size="small"
-                placeholder="Enter description"
-                variant="outlined"
                 multiline
-                rows={3}
+                rows={2}
+                size="small"
+                placeholder="Enter project description"
+                variant="outlined"
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     '& fieldset': {
@@ -127,6 +148,13 @@ export function ProjectSettings() {
                     '&:hover fieldset': {
                       borderColor: COLORS.border,
                     },
+                    '&.Mui-focused fieldset': {
+                      borderColor: COLORS.focusBorder,
+                    },
+                    backgroundColor: COLORS.inputBg,
+                  },
+                  '& .MuiInputBase-input': {
+                    color: COLORS.text,
                   },
                 }}
               />
@@ -134,15 +162,15 @@ export function ProjectSettings() {
           </Box>
         </Collapse>
       </Box>
-      
-      {/* Other Panel */}
+
+      {/* Analysis Settings Panel */}
       <Box sx={{ borderBottom: `1px solid ${COLORS.border}` }}>
         <Box 
           sx={{ 
             p: 1.5,
             cursor: 'pointer',
             '&:hover': {
-              backgroundColor: 'rgba(0, 0, 0, 0.02)'
+              backgroundColor: COLORS.hoverBg
             }
           }}
           onClick={() => handlePanelToggle('panel2')}
@@ -150,19 +178,21 @@ export function ProjectSettings() {
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <DescriptionOutlinedIcon sx={{ color: COLORS.iconColor, mr: 1, fontSize: 18 }} />
             <Typography sx={{ color: COLORS.text, fontWeight: 500, fontSize: '0.875rem' }}>
-              Some Other Panel
+              Analysis Settings
             </Typography>
+            <Box sx={{ flexGrow: 1 }} />
             {expandedPanel === 'panel2' ? (
-              <KeyboardArrowUpIcon sx={{ ml: 'auto', color: COLORS.iconColor, fontSize: 18 }} />
+              <KeyboardArrowUpIcon sx={{ color: COLORS.iconColor, fontSize: 20 }} />
             ) : (
-              <KeyboardArrowDownIcon sx={{ ml: 'auto', color: COLORS.iconColor, fontSize: 18 }} />
+              <KeyboardArrowDownIcon sx={{ color: COLORS.iconColor, fontSize: 20 }} />
             )}
           </Box>
         </Box>
-        
         <Collapse in={expandedPanel === 'panel2'}>
-          <Box sx={{ p: 1.5 }}>
-            {/* Other panel content */}
+          <Box sx={{ p: 1.5, pt: 0 }}>
+            <Typography sx={{ fontSize: '0.875rem', color: COLORS.lightText, fontStyle: 'italic' }}>
+              Analysis settings will appear here as your project develops.
+            </Typography>
           </Box>
         </Collapse>
       </Box>

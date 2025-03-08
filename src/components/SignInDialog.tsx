@@ -13,20 +13,12 @@ import {
 import { Visibility, VisibilityOff, Login as LoginIcon } from '@mui/icons-material';
 import { db } from '../db/LocalDB';
 import { useUser } from '../contexts/UserContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { getThemeColors } from '../constants/themeColors';
 import { v4 as uuidv4 } from 'uuid';
 
-// Custom colors based on the design
-const COLORS = {
-  text: '#666666',            // Text color
-  lightText: '#999999',       // Light text color
-  background: '#ffffff',      // White background
-  border: 'rgba(0, 0, 0, 0.12)', // Border color
-  buttonBg: '#888888',        // Gray button background
-  buttonHoverBg: '#666666'    // Darker gray on hover
-};
-
 // App Logo component (based on AltRouteRotated from RCAAppShell)
-const AppLogo = () => {
+const AppLogo = ({ color }: { color: string }) => {
   return (
     <svg 
       xmlns="http://www.w3.org/2000/svg" 
@@ -35,7 +27,7 @@ const AppLogo = () => {
       width="40px" 
       fill="currentColor"
       style={{ 
-        color: COLORS.text,
+        color: color,
         flexShrink: 0 
       }}
     >
@@ -48,11 +40,15 @@ const AppLogo = () => {
 
 export function SignInDialog() {
   const { currentUser, setCurrentUser, loading } = useUser();
+  const { isDarkMode } = useTheme();
   const [open, setOpen] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Get theme-specific colors
+  const COLORS = getThemeColors(isDarkMode);
 
   // Show dialog when no user is logged in and loading is complete
   useEffect(() => {
@@ -107,6 +103,13 @@ export function SignInDialog() {
     setShowPassword(!showPassword);
   };
 
+  // Create a function to handle key press events
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && username.trim()) {
+      handleSignIn();
+    }
+  };
+
   return (
     <Dialog 
       open={open} 
@@ -116,16 +119,19 @@ export function SignInDialog() {
       PaperProps={{
         sx: {
           borderRadius: 2,
-          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-          backdropFilter: 'blur(2px)',
-          backgroundColor: 'rgba(255, 255, 255, 0.9)',
-          border: '1px solid rgba(255, 255, 255, 0.8)'
+          boxShadow: isDarkMode 
+            ? '0 8px 24px rgba(0, 0, 0, 0.5)' 
+            : '0 8px 24px rgba(0, 0, 0, 0.12)',
+          backgroundColor: COLORS.dialogBg,
+          border: `1px solid ${COLORS.border}`,
+          '& .MuiDialogContent-root': {
+            backgroundColor: COLORS.dialogBg
+          }
         }
       }}
       sx={{
         [`& .${backdropClasses.root}`]: {
-          backdropFilter: 'blur(8px)',
-          backgroundColor: 'rgba(0, 0, 0, 0.2)'
+          backgroundColor: COLORS.backdropColor
         }
       }}
     >
@@ -136,7 +142,8 @@ export function SignInDialog() {
           alignItems: 'center',
           pt: 4,
           pb: 1,
-          px: 3
+          px: 3,
+          backgroundColor: COLORS.dialogBg
         }}
       >
         <Box 
@@ -146,7 +153,7 @@ export function SignInDialog() {
             mb: 3 
           }}
         >
-          <AppLogo />
+          <AppLogo color={COLORS.text} />
           <Typography 
             variant="h6" 
             component="div" 
@@ -188,6 +195,7 @@ export function SignInDialog() {
           autoFocus
           inputProps={{ maxLength: 30 }}
           variant="outlined"
+          onKeyDown={handleKeyDown}
           sx={{ 
             mb: 2,
             '& .MuiOutlinedInput-root': {
@@ -195,9 +203,12 @@ export function SignInDialog() {
               '&.Mui-focused fieldset': {
                 borderColor: COLORS.text
               },
-              backgroundColor: 'rgba(255, 255, 255, 0.7)'
+              backgroundColor: COLORS.inputBg
             },
             '& .MuiInputLabel-root.Mui-focused': {
+              color: COLORS.text
+            },
+            '& .MuiInputBase-input': {
               color: COLORS.text
             }
           }}
@@ -209,6 +220,7 @@ export function SignInDialog() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           variant="outlined"
+          onKeyDown={handleKeyDown}
           sx={{ 
             mb: 3,
             '& .MuiOutlinedInput-root': {
@@ -216,9 +228,12 @@ export function SignInDialog() {
               '&.Mui-focused fieldset': {
                 borderColor: COLORS.text
               },
-              backgroundColor: 'rgba(255, 255, 255, 0.7)'
+              backgroundColor: COLORS.inputBg
             },
             '& .MuiInputLabel-root.Mui-focused': {
+              color: COLORS.text
+            },
+            '& .MuiInputBase-input': {
               color: COLORS.text
             }
           }}
@@ -238,7 +253,11 @@ export function SignInDialog() {
         />
       </DialogContent>
 
-      <Box sx={{ px: 3, pb: 4 }}>
+      <Box sx={{ 
+        px: 3, 
+        pb: 4,
+        backgroundColor: COLORS.dialogBg
+      }}>
         <Button 
           onClick={handleSignIn} 
           disabled={!username.trim() || isSubmitting}

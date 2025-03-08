@@ -16,18 +16,9 @@ import {
 import { db } from '../db/LocalDB';
 import { useUser } from '../contexts/UserContext';
 import { useProject } from '../contexts/ProjectContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { getThemeColors } from '../constants/themeColors';
 import { v4 as uuidv4 } from 'uuid';
-
-// Custom colors based on the design
-const COLORS = {
-  text: '#666666',            // Text color
-  lightText: '#999999',       // Light text color
-  background: '#ffffff',      // White background
-  border: 'rgba(0, 0, 0, 0.12)', // Border color
-  buttonBg: '#888888',        // Gray button background
-  buttonHoverBg: '#666666',   // Darker gray on hover
-  activeInput: '#666666'      // Active input color (dark gray)
-};
 
 interface NewProjectDialogProps {
   open: boolean;
@@ -37,9 +28,13 @@ interface NewProjectDialogProps {
 export function NewProjectDialog({ open, onClose }: NewProjectDialogProps) {
   const { currentUser } = useUser();
   const { setCurrentProject, refreshProjects } = useProject();
+  const { isDarkMode } = useTheme();
   const [projectName, setProjectName] = useState('');
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Get theme-specific colors
+  const COLORS = getThemeColors(isDarkMode);
 
   const handleCreate = async () => {
     if (!currentUser || !projectName.trim()) return;
@@ -88,16 +83,25 @@ export function NewProjectDialog({ open, onClose }: NewProjectDialogProps) {
       PaperProps={{
         sx: {
           borderRadius: 2,
-          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-          backdropFilter: 'blur(2px)',
-          backgroundColor: 'rgba(255, 255, 255, 0.9)',
-          border: '1px solid rgba(255, 255, 255, 0.8)'
+          boxShadow: isDarkMode 
+            ? '0 8px 24px rgba(0, 0, 0, 0.5)' 
+            : '0 8px 24px rgba(0, 0, 0, 0.12)',
+          backgroundColor: COLORS.dialogBg,
+          border: `1px solid ${COLORS.border}`,
+          '& .MuiDialogContent-root': {
+            backgroundColor: COLORS.dialogBg
+          },
+          '& .MuiDialogActions-root': {
+            backgroundColor: COLORS.dialogBg
+          },
+          '& .MuiDialogTitle-root': {
+            backgroundColor: COLORS.dialogBg
+          }
         }
       }}
       sx={{
         [`& .${backdropClasses.root}`]: {
-          backdropFilter: 'blur(8px)',
-          backgroundColor: 'rgba(0, 0, 0, 0.2)'
+          backgroundColor: COLORS.backdropColor
         }
       }}
     >
@@ -124,15 +128,18 @@ export function NewProjectDialog({ open, onClose }: NewProjectDialogProps) {
             mb: 1.5,
             '& .MuiOutlinedInput-root': {
               '&.Mui-focused fieldset': {
-                borderColor: COLORS.activeInput
+                borderColor: COLORS.focusBorder
               },
-              backgroundColor: 'rgba(255, 255, 255, 0.7)'
+              backgroundColor: COLORS.inputBg
             },
             '& .MuiInputLabel-root.Mui-focused': {
-              color: COLORS.activeInput
+              color: COLORS.focusBorder
+            },
+            '& .MuiInputBase-input': {
+              color: COLORS.text
             },
             '& .MuiInput-underline:after': {
-              borderBottomColor: COLORS.activeInput
+              borderBottomColor: COLORS.focusBorder
             }
           }}
         />
@@ -149,15 +156,18 @@ export function NewProjectDialog({ open, onClose }: NewProjectDialogProps) {
           sx={{ 
             '& .MuiOutlinedInput-root': {
               '&.Mui-focused fieldset': {
-                borderColor: COLORS.activeInput
+                borderColor: COLORS.focusBorder
               },
-              backgroundColor: 'rgba(255, 255, 255, 0.7)'
+              backgroundColor: COLORS.inputBg
             },
             '& .MuiInputLabel-root.Mui-focused': {
-              color: COLORS.activeInput
+              color: COLORS.focusBorder
+            },
+            '& .MuiInputBase-input': {
+              color: COLORS.text
             },
             '& .MuiInput-underline:after': {
-              borderBottomColor: COLORS.activeInput
+              borderBottomColor: COLORS.focusBorder
             }
           }}
         />

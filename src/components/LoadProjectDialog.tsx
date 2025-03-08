@@ -29,19 +29,10 @@ import {
   Clear as ClearIcon
 } from '@mui/icons-material';
 import { useProject } from '../contexts/ProjectContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { getThemeColors } from '../constants/themeColors';
 import { db } from '../db/LocalDB';
 import { v4 as uuidv4 } from 'uuid';
-
-// Custom colors based on the design
-const COLORS = {
-  text: '#666666',            // Text color
-  lightText: '#999999',       // Light text color
-  background: '#ffffff',      // White background
-  border: 'rgba(0, 0, 0, 0.12)', // Border color
-  buttonBg: '#888888',        // Gray button background
-  buttonHoverBg: '#666666',   // Darker gray on hover
-  warningColor: '#d32f2f'     // For delete button/confirmation
-};
 
 interface LoadProjectDialogProps {
   open: boolean;
@@ -50,11 +41,15 @@ interface LoadProjectDialogProps {
 
 export function LoadProjectDialog({ open, onClose }: LoadProjectDialogProps) {
   const { userProjects, setCurrentProject, refreshProjects } = useProject();
+  const { isDarkMode } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [newProjectName, setNewProjectName] = useState('');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
+
+  // Get theme-specific colors
+  const COLORS = getThemeColors(isDarkMode);
 
   // Filtered projects based on search
   const filteredProjects = userProjects.filter(project => 
@@ -187,16 +182,25 @@ export function LoadProjectDialog({ open, onClose }: LoadProjectDialogProps) {
         PaperProps={{
           sx: {
             borderRadius: 2,
-            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-            backdropFilter: 'blur(2px)',
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            border: '1px solid rgba(255, 255, 255, 0.8)'
+            boxShadow: isDarkMode 
+              ? '0 8px 24px rgba(0, 0, 0, 0.5)' 
+              : '0 8px 24px rgba(0, 0, 0, 0.12)',
+            backgroundColor: COLORS.dialogBg,
+            border: `1px solid ${COLORS.border}`,
+            '& .MuiDialogContent-root': {
+              backgroundColor: COLORS.dialogBg
+            },
+            '& .MuiDialogActions-root': {
+              backgroundColor: COLORS.dialogBg
+            },
+            '& .MuiDialogTitle-root': {
+              backgroundColor: COLORS.dialogBg
+            }
           }
         }}
         sx={{
           [`& .${backdropClasses.root}`]: {
-            backdropFilter: 'blur(8px)',
-            backgroundColor: 'rgba(0, 0, 0, 0.2)'
+            backgroundColor: COLORS.backdropColor
           }
         }}
       >
@@ -236,8 +240,14 @@ export function LoadProjectDialog({ open, onClose }: LoadProjectDialogProps) {
                 </InputAdornment>
               ) : null,
               sx: { 
-                backgroundColor: 'rgba(255, 255, 255, 0.7)',
-                borderRadius: 1.5
+                backgroundColor: COLORS.inputBg,
+                borderRadius: 1.5,
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: COLORS.border
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: COLORS.text
+                }
               }
             }}
             sx={{ 
@@ -247,6 +257,9 @@ export function LoadProjectDialog({ open, onClose }: LoadProjectDialogProps) {
                 '&.Mui-focused fieldset': {
                   borderColor: COLORS.text
                 }
+              },
+              '& .MuiInputBase-input': {
+                color: COLORS.text
               }
             }}
           />
@@ -268,7 +281,7 @@ export function LoadProjectDialog({ open, onClose }: LoadProjectDialogProps) {
                     sx={{ 
                       py: 1.5,
                       '&:hover': {
-                        backgroundColor: 'rgba(255, 255, 255, 0.7)'
+                        backgroundColor: COLORS.listItemHover
                       },
                       // Disable hover effect when editing
                       ...(editingProjectId === project.id && {
@@ -319,14 +332,19 @@ export function LoadProjectDialog({ open, onClose }: LoadProjectDialogProps) {
                                     </IconButton>
                                   </Tooltip>
                                 </Box>
-                              )
+                              ),
+                              sx: {
+                                backgroundColor: COLORS.inputBg
+                              }
                             }}
                             sx={{
-                              backgroundColor: 'rgba(255, 255, 255, 0.7)',
                               '& .MuiOutlinedInput-root': {
                                 '&.Mui-focused fieldset': {
                                   borderColor: COLORS.text
                                 }
+                              },
+                              '& .MuiInputBase-input': {
+                                color: COLORS.text
                               }
                             }}
                             onClick={(e) => e.stopPropagation()}
@@ -402,7 +420,9 @@ export function LoadProjectDialog({ open, onClose }: LoadProjectDialogProps) {
                       </ListItemSecondaryAction>
                     )}
                   </ListItemButton>
-                  {index < filteredProjects.length - 1 && <Divider />}
+                  {index < filteredProjects.length - 1 && 
+                    <Divider sx={{ borderColor: COLORS.border }} />
+                  }
                 </Fragment>
               ))}
             </List>
@@ -427,9 +447,20 @@ export function LoadProjectDialog({ open, onClose }: LoadProjectDialogProps) {
         PaperProps={{
           sx: {
             borderRadius: 2,
-            backdropFilter: 'blur(2px)',
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            border: '1px solid rgba(255, 255, 255, 0.8)'
+            backgroundColor: COLORS.dialogBg,
+            border: `1px solid ${COLORS.border}`,
+            boxShadow: isDarkMode 
+              ? '0 8px 24px rgba(0, 0, 0, 0.5)' 
+              : '0 8px 24px rgba(0, 0, 0, 0.12)',
+            '& .MuiDialogContent-root': {
+              backgroundColor: COLORS.dialogBg
+            },
+            '& .MuiDialogActions-root': {
+              backgroundColor: COLORS.dialogBg
+            },
+            '& .MuiDialogTitle-root': {
+              backgroundColor: COLORS.dialogBg
+            }
           }
         }}
         maxWidth="xs"
