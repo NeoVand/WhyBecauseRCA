@@ -3,9 +3,10 @@ import { Box, Typography } from '@mui/material';
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import { useTheme } from '../contexts/ThemeContext';
 import { useProject } from '../contexts/ProjectContext';
-import { CausalNode, NodeType } from '../models/types';
+import { CausalNode, NodeType, ConnectionPort, Connection } from '../models/types';
 import { NodeItem } from '../components/NodeItem';
 import NodeService from '../services/nodeService';
+import ConnectionService from '../services/connectionService';
 
 // Function to get colors based on current theme
 const getViewColors = (isDarkMode: boolean) => {
@@ -18,7 +19,9 @@ const getViewColors = (isDarkMode: boolean) => {
     background: isDarkMode ? '#1e1e1e' : '#ffffff',             // Background color
     border: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)', // Border color
     gridDot: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)', // Grid dots
-    diagramBg: isDarkMode ? '#121212' : '#ffffff'               // Diagram background
+    diagramBg: isDarkMode ? '#121212' : '#ffffff',               // Diagram background
+    connectionLine: isDarkMode ? '#b0b0b0' : '#999999',            // Connection line color
+    connectionDraft: isDarkMode ? '#e0e0e0' : '#666666'           // Connection draft color
   };
 };
 
@@ -28,16 +31,129 @@ interface DiagramViewProps {
   isSelectMode: boolean;
   isPanMode: boolean;
   onNodeAdded: () => void;
+  pathCurviness?: number; // Optional prop to control the curviness of connection paths
 }
 
-export function DiagramView({ activeNodeType, isSelectMode, isPanMode, onNodeAdded }: DiagramViewProps) {
+// Helper function to calculate smooth curved path between ports using cubic Bezier curves
+const calculateSmoothPath = (
+  sourceX: number, 
+  sourceY: number, 
+  targetX: number, 
+  targetY: number,
+  sourcePort: ConnectionPort,
+  targetPort: ConnectionPort,
+  curvinessFactor: number = 0.3 // Default curviness factor (0.1 = subtle, 1.0 = very curved)
+): string => {
+  // Determine direction based on port types
+  const sourceDirection = sourcePort === 'top' ? -1 : 1;
+  const targetDirection = targetPort === 'top' ? -1 : 1;
+  
+  // Vertical offsets to maintain same entry/exit angles
+  const sourceOffset = 15 * sourceDirection;
+  const targetOffset = 15 * targetDirection;
+  
+  // Calculate first segment points (exiting the source)
+  const sourceExitX = sourceX;
+  const sourceExitY = sourceY + sourceOffset;
+  
+  // Calculate last segment points (entering the target)
+  const targetEntryX = targetX;
+  const targetEntryY = targetY + targetOffset;
+  
+  // Calculate horizontal distance between nodes
+  const horizontalDistance = Math.abs(targetX - sourceX);
+  
+  // Calculate control point distances - these determine the "bulge" of the curve
+  // Adjust with curvinessFactor to control how curved the paths are
+  const maxCurveDistance = 250; // Maximum curve distance to prevent excessive curves
+  const controlPointDistance = Math.max(
+    horizontalDistance * curvinessFactor, 
+    Math.min(horizontalDistance, maxCurveDistance * curvinessFactor)
+  );
+  
+  // Calculate control points for the cubic Bezier curve
+  // First control point extends from source in vertical direction
+  const cp1x = sourceX;
+  const cp1y = sourceY + sourceOffset + (controlPointDistance * sourceDirection);
+  
+  // Second control point extends from target in vertical direction
+  const cp2x = targetX;
+  const cp2y = targetY + targetOffset + (controlPointDistance * targetDirection);
+  
+  // Generate path string using cubic Bezier curve
+  return `M ${sourceX} ${sourceY} ` +                // Starting point
+         `L ${sourceExitX} ${sourceExitY} ` +       // Short straight line out of node
+         `C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ` +   // Cubic Bezier curve with control points
+         `${targetEntryX} ${targetEntryY} ` +       // End point of curve
+         `L ${targetX} ${targetY}`;                 // Short straight line into node
+};
+
+// Helper function to get exact port position from DOM
+const getPortPosition = (
+  nodeId: string,
+  portType: ConnectionPort,
+  nodesRef: React.RefObject<HTMLDivElement>
+): [number, number] | null => {
+  if (!nodesRef.current) {
+    return null;
+  }
+  
+  // Find the node element
+  const nodeSelector = `[data-node-id="${nodeId}"]`;
+  const nodeElement = nodesRef.current.querySelector(nodeSelector);
+  if (!nodeElement) {
+    return null;
+  }
+  
+  // Find the port element (top or bottom)
+  const portClass = portType === 'top' ? 'node-top-port' : 'node-bottom-port';
+  const portSelector = `.${portClass}`;
+  const portElement = nodeElement.querySelector(portSelector) as HTMLElement;
+  if (!portElement) {
+    return null;
+  }
+  
+  // Get the port's position relative to the diagram
+  const portRect = portElement.getBoundingClientRect();
+  const containerRect = nodesRef.current.getBoundingClientRect();
+
+  // Calculate the center of the port
+  const portCenterX = portRect.left + portRect.width / 2 - containerRect.left + nodesRef.current.scrollLeft;
+  const portCenterY = portRect.top + portRect.height / 2 - containerRect.top + nodesRef.current.scrollTop;
+  
+  return [portCenterX, portCenterY];
+};
+
+export function DiagramView({ 
+  activeNodeType, 
+  isSelectMode, 
+  isPanMode, 
+  onNodeAdded,
+  pathCurviness = 0.2 // Default curviness if not provided
+}: DiagramViewProps) {
   const { isDarkMode } = useTheme();
   const { currentProject } = useProject();
   const COLORS = getViewColors(isDarkMode);
   
   const [nodes, setNodes] = useState<CausalNode[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  
+  // Global mouse position state - track mouse position globally
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  // Use a ref to track the latest mouse position without triggering re-renders
+  const mousePositionRef = useRef({ x: 0, y: 0 });
+  
+  // Connection creation state
+  const [connectingState, setConnectingState] = useState<{
+    sourceNodeId: string;
+    sourcePort: ConnectionPort;
+    sourceX: number;
+    sourceY: number;
+    targetX: number;
+    targetY: number;
+  } | null>(null);
   
   // Panning state
   const [isPanning, setIsPanning] = useState(false);
@@ -47,168 +163,279 @@ export function DiagramView({ activeNodeType, isSelectMode, isPanMode, onNodeAdd
   
   const diagramRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const nodesRef = useRef<HTMLDivElement>(null);
   
-  // Update data attribute when pan mode changes
+  // Update ref when state changes
   useEffect(() => {
-    if (diagramRef.current) {
-      diagramRef.current.setAttribute('data-pan-mode', isPanMode ? 'true' : 'false');
-      
-      // Force the cursor style directly
-      diagramRef.current.style.cursor = isPanMode ? 'grab' : (isSelectMode ? 'default' : 'crosshair');
+    mousePositionRef.current = mousePosition;
+  }, [mousePosition]);
+
+  // Load nodes from database
+  const loadNodes = useCallback(async () => {
+    if (!currentProject) return;
+    try {
+      const projectNodes = await NodeService.getNodesByProject(currentProject.id);
+      setNodes(projectNodes);
+    } catch (err) {
+      console.error("Error loading nodes:", err);
     }
-  }, [isPanMode, isSelectMode]);
+  }, [currentProject]);
   
-  // Load nodes on component mount and when project changes
-  useEffect(() => {
-    let isMounted = true;
-    
-    const loadNodes = async () => {
+  // Load connections from database
+  const loadConnections = useCallback(async () => {
+    if (!currentProject) return;
+    try {
+      const projectConnections = await ConnectionService.getConnectionsByProject(currentProject.id);
+      setConnections(projectConnections);
+    } catch (err) {
+      console.error("Error loading connections:", err);
+    }
+  }, [currentProject]);
+  
+  // Handle updating a node's position when it's dragged
+  const updateNodePosition = useCallback(async (nodeId: string, x: number, y: number) => {
+    try {
+      // Update local state immediately for responsiveness
+      setNodes(prevNodes => prevNodes.map(node => 
+        node.id === nodeId ? { ...node, x, y } : node
+      ));
+      
+      // Persist changes to database
+      await NodeService.updateNodePosition(nodeId, x, y);
+      
+      // Refresh connections to ensure they follow the nodes
       if (currentProject) {
-        try {
-          const projectNodes = await NodeService.getNodesByProject(currentProject.id);
-          // Only update state if component is still mounted
-          if (isMounted) {
-            setNodes(projectNodes || []);
-          }
-        } catch (error) {
-          console.error('Error loading nodes:', error);
-          // If there's an error, set nodes to empty array to prevent further errors
-          if (isMounted) {
-            setNodes([]);
-          }
+        await loadConnections();
+      }
+    } catch (err) {
+      console.error("Error updating node position:", err);
+    }
+  }, [currentProject, loadConnections]);
+  
+  // Global mouse move handler - keep track of mouse position at all times
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (diagramRef.current) {
+        const rect = diagramRef.current.getBoundingClientRect();
+        const scrollLeft = diagramRef.current.scrollLeft;
+        const scrollTop = diagramRef.current.scrollTop;
+        
+        const newX = e.clientX - rect.left + scrollLeft;
+        const newY = e.clientY - rect.top + scrollTop;
+        
+        // Only update if position has actually changed - compare with ref
+        if (newX !== mousePositionRef.current.x || newY !== mousePositionRef.current.y) {
+          // Update global mouse position
+          setMousePosition({
+            x: newX,
+            y: newY
+          });
         }
       }
     };
     
-    loadNodes();
+    document.addEventListener('mousemove', handleGlobalMouseMove);
     
-    // Cleanup function to prevent state updates on unmounted component
     return () => {
-      isMounted = false;
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
     };
-  }, [currentProject]);
-  
-  // Setup global handlers for panning
+  }, []);
+
+  // Prevent node dragging in DiagramView when NodeItem is handling it directly
   useEffect(() => {
-    const onMouseMove = (e: MouseEvent) => {
-      if (!isPanning) return;
+    // Only update node position if we're dragging and have a selected node
+    // and NodeItem is not handling the drag directly
+    if (isDragging && selectedNodeId && contentRef.current) {
+      // For real-time rendering updates of connections,
+      // We just trigger a re-render of connections during drag
+      // We don't update node positions here as NodeItem handles it
+      const draggingNode = document.querySelector(`[data-node-id="${selectedNodeId}"]`) as HTMLElement | null;
+      if (draggingNode && draggingNode.style.transform) {
+        // Node is being dragged by NodeItem component, so we don't update position here
+        // Just force a re-render of connections
+        loadConnections();
+      }
+    }
+  }, [isDragging, selectedNodeId, mousePosition, loadConnections]);
+  
+  // Handle panning based on mouse position
+  useEffect(() => {
+    if (isPanning && diagramRef.current) {
+      // Calculate movement from previous position
+      const dx = mousePosition.x - panStartRef.current.x;
+      const dy = mousePosition.y - panStartRef.current.y;
       
-      // Calculate movement
-      const deltaX = e.clientX - panStartRef.current.x;
-      const deltaY = e.clientY - panStartRef.current.y;
-      
-      // Update the diagram position (move in the direction of mouse movement)
+      if (dx !== 0 || dy !== 0) {
+        // Update diagram position
       setDiagramPosition(prev => ({
-        x: prev.x + deltaX,
-        y: prev.y + deltaY
-      }));
-      
-      // Update the reference point for next move
-      panStartRef.current = { x: e.clientX, y: e.clientY };
-    };
+          x: prev.x + dx,
+          y: prev.y + dy
+        }));
+        
+        // Update reference point for next move
+        panStartRef.current = { 
+          x: mousePosition.x, 
+          y: mousePosition.y 
+        };
+      }
+    }
+  }, [isPanning, mousePosition]);
+
+  // Update connection target position based on mouse position
+  useEffect(() => {
+    // Only update if we're in connecting mode and mouse position has changed
+    if (connectingState && 
+        (mousePosition.x !== connectingState.targetX || 
+         mousePosition.y !== connectingState.targetY)) {
+      // Use functional update to avoid capturing stale state
+      setConnectingState(prev => {
+        if (prev) {
+          // Only update if mouse position is different from current target
+          if (mousePosition.x !== prev.targetX || mousePosition.y !== prev.targetY) {
+            return {
+              ...prev,
+              targetX: mousePosition.x,
+              targetY: mousePosition.y
+            };
+          }
+        }
+        return prev;
+      });
+    }
+  }, [mousePosition]);
+  
+  // For mouse up during connection creation or panning
+  const handleGlobalMouseUp = useCallback(async () => {
+    // Remove the connecting class
+    if (diagramRef.current) {
+      diagramRef.current.classList.remove('connecting');
+    }
     
-    const onMouseUp = () => {
+    // End node dragging
+    if (isDragging && selectedNodeId) {
+      setIsDragging(false);
+      
+      // Get the current node position from local state
+      const currentNode = nodes.find(n => n.id === selectedNodeId);
+      if (currentNode) {
+        // Persist position change to database
+        await updateNodePosition(selectedNodeId, currentNode.x, currentNode.y);
+      }
+    }
+    
+    // End connection creation
+    if (connectingState) {
+      setConnectingState(null);
+    }
+    
+    // End panning
       if (isPanning) {
         setIsPanning(false);
         
-        // Reset cursor
+      // Reset cursor if in pan mode
         if (diagramRef.current && isPanMode) {
           diagramRef.current.style.cursor = 'grab';
         }
       }
-    };
+  }, [connectingState, isPanning, isDragging, selectedNodeId, nodes, updateNodePosition, isPanMode]);
+
+  useEffect(() => {
+    document.addEventListener('mouseup', handleGlobalMouseUp);
     
-    if (isPanning) {
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [handleGlobalMouseUp]);
+  
+  // Update data attribute when pan mode changes
+  useEffect(() => {
+    if (diagramRef.current) {
+      diagramRef.current.setAttribute('data-pan-mode', isPanMode.toString());
+      diagramRef.current.setAttribute('data-select-mode', isSelectMode.toString());
       
-      return () => {
-        window.removeEventListener('mousemove', onMouseMove);
-        window.removeEventListener('mouseup', onMouseUp);
-      };
+      // Force the cursor style directly
+      diagramRef.current.style.cursor = isPanMode 
+        ? 'grab' 
+        : (isSelectMode ? 'default' : 'crosshair');
     }
-  }, [isPanning, isPanMode, diagramPosition]);
+  }, [isPanMode, isSelectMode]);
+  
+  // Load nodes and connections when project changes
+  useEffect(() => {
+    if (currentProject) {
+      loadNodes();
+      loadConnections();
+    }
+  }, [currentProject, loadNodes, loadConnections]);
   
   // Handle mouse down for panning
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    // Make sure panning is only activated in pan mode
-    if (!isPanMode) return;
-    
-    // If we're clicking directly on a node, don't initiate panning from here
-    const isNodeClick = (e.target as HTMLElement).closest('.node-item') !== null;
-    
-    // Only proceed if we're clicking on the diagram background (not a node)
-    if (isNodeClick) return;
-    
-    // Prevent default behavior
+    if (isPanMode) {
     e.preventDefault();
+      setIsPanning(true);
     
-    // Store starting position
-    panStartRef.current = { x: e.clientX, y: e.clientY };
-    
-    // Set cursor to grabbing
+      // Update the cursor style to "grabbing" during the pan operation
     if (diagramRef.current) {
       diagramRef.current.style.cursor = 'grabbing';
     }
     
-    setIsPanning(true);
+      // Store the starting point for the pan using our global mouse position
+      panStartRef.current = { x: mousePosition.x, y: mousePosition.y };
+    }
   };
   
   // Handle click on the diagram background
   const handleDiagramClick = async (e: React.MouseEvent<HTMLDivElement>) => {
-    // If we're panning or the click isn't directly on the content box, ignore
-    if (isPanning) return;
+    // Don't create nodes if we're in pan mode or if we're dragging
+    if (isPanMode || isDragging || connectingState) return;
     
-    // Only process clicks directly on the diagram content (not on nodes)
-    // Check if contentRef contains the target and it's not a node
-    const isContentClick = contentRef.current?.contains(e.target as Node) && 
-                         !(e.target as HTMLElement).closest('.node-item');
+    // Don't create nodes if we're clicking on an existing node
+    if ((e.target as HTMLElement).closest('.node-item')) return;
     
-    if (!isContentClick) return;
-    
-    // Don't create nodes when in select/pan mode or if dragging
-    if (isSelectMode || isPanMode || isDragging || !activeNodeType || !currentProject) {
-      // Clear selection if in select mode and clicking background
-      if (isSelectMode && !isDragging && !isPanMode) {
+    // Only create nodes in add mode (not select mode)
+    if (isSelectMode) {
+      // In select mode, clicking on the background deselects the current node
         setSelectedNodeId(null);
-      }
       return;
     }
     
-    // Get click position relative to the content container, accounting for the translation
+    // If we have an active node type, create a new node
+    if (activeNodeType && currentProject) {
+      try {
+        // Calculate position relative to the diagram content
     const contentRect = contentRef.current?.getBoundingClientRect();
     if (!contentRect) return;
     
-    // Calculate position in the diagram's coordinate system
-    // We need to account for the current transform/translation
-    const x = e.clientX - contentRect.left - diagramPosition.x;
-    const y = e.clientY - contentRect.top - diagramPosition.y;
-    
-    try {
-      // Create a new node at the clicked position
-      const newNode = await NodeService.createNode({
+        const diagramRect = diagramRef.current?.getBoundingClientRect();
+        if (!diagramRect) return;
+        
+        // Calculate position relative to the diagram content
+        const x = e.clientX - diagramRect.left + (diagramRef.current?.scrollLeft || 0) - diagramPosition.x;
+        const y = e.clientY - diagramRect.top + (diagramRef.current?.scrollTop || 0) - diagramPosition.y;
+        
+        // Create the new node
+        const newNode: Omit<CausalNode, 'id'> = {
         projectId: currentProject.id,
         type: activeNodeType,
         title: `New ${activeNodeType}`,
         description: '',
         x,
         y
-      });
+        };
       
-      // Add new node to the local state
-      setNodes(prev => [...prev, newNode]);
+        const createdNode = await NodeService.createNode(newNode);
       
-      // Select the newly created node
-      setSelectedNodeId(newNode.id);
+        // Add the new node to the local state
+        setNodes(prevNodes => [...prevNodes, createdNode]);
       
-      // Notify parent that a node was added (to switch to select mode)
+        // Select the new node
+        setSelectedNodeId(createdNode.id);
+      
+        // Notify parent that a node was added
       onNodeAdded();
-      
-    } catch (error) {
-      console.error('Error creating node:', error);
-      
-      // Even on error, switch to select mode as feedback to user that their click was processed
-      onNodeAdded();
+      } catch (err) {
+        console.error("Error creating node:", err);
+      }
     }
   };
   
@@ -234,15 +461,315 @@ export function DiagramView({ activeNodeType, isSelectMode, isPanMode, onNodeAdd
   
   // Delete the selected node
   const deleteSelectedNode = async () => {
-    if (selectedNodeId) {
+    if (!selectedNodeId) return;
+    
       try {
+      // Delete any connections associated with this node
+      await ConnectionService.deleteConnectionsForNode(selectedNodeId);
+      
+      // Delete the node
         await NodeService.deleteNode(selectedNodeId);
-        setNodes(prev => prev.filter(node => node.id !== selectedNodeId));
+      
+      // Update local state
+      setNodes(prevNodes => prevNodes.filter(node => node.id !== selectedNodeId));
+      setConnections(prevConnections => 
+        prevConnections.filter(conn => 
+          conn.sourceNodeId !== selectedNodeId && conn.targetNodeId !== selectedNodeId
+        )
+      );
+      
+      // Clear selection
         setSelectedNodeId(null);
-      } catch (error) {
-        console.error('Error deleting node:', error);
-      }
+    } catch (err) {
+      console.error("Error deleting node:", err);
     }
+  };
+  
+  // Port mouse down handler - start connection
+  const handlePortMouseDown = (nodeId: string, portType: ConnectionPort, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault(); // Prevent any default behavior
+    
+    if (!diagramRef.current || !nodesRef.current) {
+      return;
+    }
+    
+    // Add a class to the diagram to indicate we're connecting
+    diagramRef.current.classList.add('connecting');
+    
+    // Get the exact port position
+    const portPosition = getPortPosition(nodeId, portType, nodesRef as React.RefObject<HTMLDivElement>);
+    if (!portPosition) {
+      return;
+    }
+    
+    const [sourceX, sourceY] = portPosition;
+    
+    // Start creating a connection - targetX and targetY start at the mouse position
+    setConnectingState({
+      sourceNodeId: nodeId,
+      sourcePort: portType,
+      sourceX,
+      sourceY,
+      targetX: mousePosition.x,
+      targetY: mousePosition.y
+    });
+  };
+  
+  // Port mouse up handler - complete connection
+  const handlePortMouseUp = async (nodeId: string, portType: ConnectionPort, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    // If we're not creating a connection, do nothing
+    if (!connectingState) {
+      return;
+    }
+    
+    // Don't connect to the same node
+    if (connectingState.sourceNodeId === nodeId) {
+      setConnectingState(null);
+      return;
+    }
+    
+    // Check valid port combinations
+    // In most cases we want bottom→top, but allow top→bottom for reverse connections
+    const isValidPortCombination = (
+      (connectingState.sourcePort === 'bottom' && portType === 'top') ||
+      (connectingState.sourcePort === 'top' && portType === 'bottom')
+    );
+    
+    if (!isValidPortCombination) {
+      setConnectingState(null);
+      return;
+    }
+    
+    // Check for cycles
+    try {
+      // For forward connections (bottom→top), check source→target
+      // For backward connections (top→bottom), check target→source
+      const checkSourceId = connectingState.sourcePort === 'bottom' 
+        ? connectingState.sourceNodeId 
+        : nodeId;
+        
+      const checkTargetId = connectingState.sourcePort === 'bottom'
+        ? nodeId
+        : connectingState.sourceNodeId;
+      
+      const wouldCreateCycle = await ConnectionService.wouldFormCycle(checkSourceId, checkTargetId);
+      
+      if (wouldCreateCycle) {
+        alert('Cannot create connection: would form a cycle in the graph');
+        setConnectingState(null);
+        return;
+      }
+      
+      // Create connection in correct direction
+      let newConnection: Omit<Connection, 'id'>;
+      
+      if (connectingState.sourcePort === 'bottom') {
+        // Forward connection: source bottom → target top
+        newConnection = {
+          projectId: currentProject!.id,
+          sourceNodeId: connectingState.sourceNodeId,
+          targetNodeId: nodeId,
+          sourcePort: 'bottom',
+          targetPort: 'top'
+        };
+      } else {
+        // Backward connection: source top → target bottom
+        newConnection = {
+          projectId: currentProject!.id,
+          sourceNodeId: nodeId,
+          targetNodeId: connectingState.sourceNodeId,
+          sourcePort: 'bottom',
+          targetPort: 'top'
+        };
+      }
+      
+      const createdConnection = await ConnectionService.createConnection(newConnection);
+      setConnections([...connections, createdConnection]);
+      
+    } catch (err) {
+      console.error("Error creating connection:", err);
+    }
+    
+    // Reset connection state
+    setConnectingState(null);
+  };
+  
+  // Handle node resize (expansion/collapse)
+  const handleNodeResize = useCallback(() => {
+    // Refresh connections to update arrow positions in real-time
+    loadConnections();
+  }, [loadConnections]);
+  
+  // Add references and state for JavaScript animation
+  const animationRef = useRef<number | null>(null);
+  const [dashOffset, setDashOffset] = useState(0);
+  
+  // Setup and handle the animation with direct DOM manipulation
+  useEffect(() => {
+    const dashLength = 7; // Total length of dash+gap (4+3)
+    
+    // Animation function using requestAnimationFrame
+    const animateDashes = () => {
+      // Update all path elements with the current offset
+      const paths = document.querySelectorAll('.diagram-connection-path');
+      paths.forEach(path => {
+        if (path instanceof SVGPathElement) {
+          path.style.strokeDashoffset = String(dashOffset);
+        }
+      });
+      
+      // Update the offset for the next frame
+      setDashOffset((prevOffset) => (prevOffset + 0.5) % dashLength);
+      
+      // Continue the animation loop
+      animationRef.current = requestAnimationFrame(animateDashes);
+    };
+    
+    // Start animation
+    animationRef.current = requestAnimationFrame(animateDashes);
+    
+    // Cleanup animation on unmount
+    return () => {
+      if (animationRef.current !== null) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, []);
+  
+  // Render the SVG connections layer
+  const renderConnectionsLayer = () => {
+    return (
+      <svg 
+        className="connections-layer"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          zIndex: 1
+        }}
+      >
+        <defs>
+          <marker 
+            id="arrowhead" 
+            markerWidth="10" 
+            markerHeight="7" 
+            refX="0" 
+            refY="3.5" 
+            orient="auto"
+          >
+            <polygon 
+              points="0 0, 10 3.5, 0 7" 
+              fill={COLORS.connectionLine} 
+            />
+          </marker>
+          <marker 
+            id="arrowhead-draft" 
+            markerWidth="10" 
+            markerHeight="7" 
+            refX="0" 
+            refY="3.5" 
+            orient="auto"
+          >
+            <polygon 
+              points="0 0, 10 3.5, 0 7" 
+              fill={COLORS.connectionDraft} 
+            />
+          </marker>
+        </defs>
+        
+        {/* Render existing connections */}
+        {connections.map(connection => {
+          // Get port positions for source and target
+          const sourceNode = nodes.find(n => n.id === connection.sourceNodeId);
+          const targetNode = nodes.find(n => n.id === connection.targetNodeId);
+          
+          // Skip rendering if either node doesn't exist
+          if (!sourceNode || !targetNode) return null;
+          
+          // Use getPortPosition if nodes are rendered in the DOM
+          const sourcePos = getPortPosition(
+            connection.sourceNodeId, 
+            connection.sourcePort, 
+            nodesRef as React.RefObject<HTMLDivElement>
+          );
+          
+          const targetPos = getPortPosition(
+            connection.targetNodeId, 
+            connection.targetPort, 
+            nodesRef as React.RefObject<HTMLDivElement>
+          );
+          
+          // If we can't get port positions from DOM (e.g., during initial render or if nodes are moving),
+          // calculate approximate positions from node coordinates
+          let sourceX, sourceY, targetX, targetY;
+          
+          if (sourcePos && targetPos) {
+            [sourceX, sourceY] = sourcePos;
+            [targetX, targetY] = targetPos;
+          } else {
+            // Approximate port positions based on node coordinates
+            // These are rough estimates and might need tweaking
+            sourceX = sourceNode.x + (connection.sourcePort === 'top' ? 0 : 0); // Adjust for center
+            sourceY = sourceNode.y + (connection.sourcePort === 'top' ? -7 : 47); // Adjust based on node height
+            
+            targetX = targetNode.x + (connection.targetPort === 'top' ? 0 : 0); // Adjust for center
+            targetY = targetNode.y + (connection.targetPort === 'top' ? -7 : 47); // Adjust based on node height
+          }
+          
+          // Calculate smooth path with curviness factor
+          const pathData = calculateSmoothPath(
+            sourceX, 
+            sourceY, 
+            targetX, 
+            targetY,
+            connection.sourcePort,
+            connection.targetPort,
+            pathCurviness // Use the curviness prop
+          );
+          
+          return (
+            <path
+              key={connection.id}
+              d={pathData}
+              fill="none"
+              stroke={COLORS.connectionLine}
+              strokeWidth={1.5}
+              strokeDasharray="4 3"
+              markerEnd="url(#arrowhead)"
+              className="diagram-connection-path" // Changed class name
+            />
+          );
+        })}
+        
+        {/* Render the connection being created */}
+        {connectingState && (
+          <path
+            key="connection-preview"
+            d={calculateSmoothPath(
+              connectingState.sourceX,
+              connectingState.sourceY,
+              connectingState.targetX,
+              connectingState.targetY,
+              connectingState.sourcePort,
+              connectingState.sourcePort === 'top' ? 'bottom' : 'top',
+              pathCurviness
+            )}
+            fill="none"
+            stroke={COLORS.connectionDraft}
+            strokeWidth={2.5}
+            strokeDasharray="5 3"
+            markerEnd="url(#arrowhead-draft)"
+            className="diagram-connection-path" // Changed class name
+          />
+        )}
+      </svg>
+    );
   };
   
   return (
@@ -280,26 +807,27 @@ export function DiagramView({ activeNodeType, isSelectMode, isPanMode, onNodeAdd
           willChange: 'transform',
         }}
       >
-        {/* Nodes */}
-        {nodes.map(node => (
+        {/* Render the connections layer first (below nodes) */}
+        {renderConnectionsLayer()}
+        
+        {/* Then render the nodes on top */}
+        <Box ref={nodesRef}>
+          {nodes.map((node) => (
           <NodeItem
             key={node.id}
-            node={{
-              ...node,
-              // Adjust node position based on diagram position (for proper rendering)
-              x: node.x,
-              y: node.y,
-            }}
-            isSelected={node.id === selectedNodeId}
+              node={node}
+              isSelected={selectedNodeId === node.id}
             onSelect={handleNodeSelect}
             onDragStart={() => setIsDragging(true)}
-            onDragEnd={() => {
-              // Delay to avoid triggering click
-              setTimeout(() => setIsDragging(false), 100);
-            }}
-            className="node-item"
+              onDragEnd={() => setIsDragging(false)}
+              onPortMouseDown={handlePortMouseDown}
+              onPortMouseUp={handlePortMouseUp}
+              onNodeResize={handleNodeResize}
+              onPositionChange={updateNodePosition}
+              className='node-item'
           />
         ))}
+        </Box>
         
         {/* Empty state / placeholder (show only when no nodes) */}
         {nodes.length === 0 && (

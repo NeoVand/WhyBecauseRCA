@@ -1,10 +1,11 @@
 import Dexie, { Table } from 'dexie';
-import { User, Project, CausalNode } from '../models/types';
+import { User, Project, CausalNode, Connection } from '../models/types';
 
 export class LocalDB extends Dexie {
   users!: Table<User>;
   projects!: Table<Project>;
   nodes!: Table<CausalNode>;
+  connections!: Table<Connection>;
 
   constructor() {
     super('WhyBecauseRCA');
@@ -20,6 +21,14 @@ export class LocalDB extends Dexie {
       users: 'id, username',
       projects: 'id, ownerId, name',
       nodes: 'id, projectId, type, title',
+    });
+
+    // Add connections table
+    this.version(3).stores({
+      users: 'id, username',
+      projects: 'id, ownerId, name',
+      nodes: 'id, projectId, type, title',
+      connections: 'id, projectId, sourceNodeId, targetNodeId',
     });
   }
 }

@@ -66,4 +66,15 @@ export const NODE_TYPES: Record<NodeType, NodeTypeInfo> = {
     icon: 'thermostat',
     color: '#4CAF50'
   }
-}; 
+};
+
+export type ConnectionPort = 'top' | 'bottom';
+
+export interface Connection {
+  id: string;
+  projectId: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+  sourcePort: ConnectionPort;
+  targetPort: ConnectionPort;
+} 

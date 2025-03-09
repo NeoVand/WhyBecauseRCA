@@ -13,7 +13,7 @@ import {
   Stack
 } from '@mui/material';
 import { useTheme } from '../contexts/ThemeContext';
-import { CausalNode, NODE_TYPES, NodeType } from '../models/types';
+import { CausalNode, NodeType, NODE_TYPES, ConnectionPort } from '../models/types';
 import NodeService from '../services/nodeService';
 import EditIcon from '@mui/icons-material/Edit';
 import DescriptionIcon from '@mui/icons-material/Description';
@@ -28,9 +28,24 @@ interface NodeItemProps {
   onDragStart: () => void;
   onDragEnd: () => void;
   className?: string;
+  onPortMouseDown: (nodeId: string, portType: ConnectionPort, event: React.MouseEvent) => void;
+  onPortMouseUp: (nodeId: string, portType: ConnectionPort, event: React.MouseEvent) => void;
+  onNodeResize?: () => void;
+  onPositionChange?: (nodeId: string, x: number, y: number) => void;
 }
 
-export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, className }: NodeItemProps) {
+export function NodeItem({ 
+  node, 
+  isSelected, 
+  onSelect, 
+  onDragStart, 
+  onDragEnd, 
+  className,
+  onPortMouseDown,
+  onPortMouseUp,
+  onNodeResize,
+  onPositionChange
+}: NodeItemProps) {
   const { isDarkMode } = useTheme();
   const THEME_COLORS = getThemeColors(isDarkMode);
   const [position, setPosition] = useState({ x: node.x, y: node.y });
@@ -44,6 +59,8 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, c
   
   // Use refs to track state without re-renders
   const nodeRef = useRef<HTMLDivElement>(null);
+  const topPortRef = useRef<HTMLDivElement>(null);
+  const bottomPortRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
   const dragStartPosRef = useRef({ x: 0, y: 0 });
   const initialNodePosRef = useRef({ x: 0, y: 0 });
@@ -111,15 +128,66 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, c
     };
   }, [isExpanded]); // Only re-run when expanded state changes
   
-  // Improve the toggleExpanded function
+  // Improve the toggleExpanded function with animation-aware updates
   const toggleExpanded = (e: React.MouseEvent) => {
     e.stopPropagation();
+    
+    // Prevent toggling if clicking on text input or textarea
+    const target = e.target as HTMLElement;
+    if (
+      target.tagName === 'INPUT' || 
+      target.tagName === 'TEXTAREA' || 
+      target.closest('.MuiInputBase-root') ||
+      target.closest('.MuiFormControl-root') ||
+      (isExpanded && isEditing) // Don't collapse if already expanded and editing
+    ) {
+      return;
+    }
     
     // Toggle expanded state and edit mode
     const newExpandedState = !isExpanded;
     setIsExpanded(newExpandedState);
     setIsEditing(newExpandedState);
+    
+    // Notify parent of size change
+    if (onNodeResize) {
+      // Call once immediately for initial update
+      onNodeResize();
+      
+      // Use requestAnimationFrame for smoother animation-synced updates
+      const animationDuration = 300; // Match the CSS transition duration (in ms)
+      const startTime = performance.now();
+      
+      const updateDuringAnimation = (currentTime: number) => {
+        if (currentTime - startTime < animationDuration) {
+          // Continue updating during the animation
+          onNodeResize?.();
+          requestAnimationFrame(updateDuringAnimation);
+        } else {
+          // Final update at the end of animation
+          onNodeResize?.();
+        }
+      };
+      
+      // Start the animation frame updates
+      requestAnimationFrame(updateDuringAnimation);
+    }
   };
+  
+  // Update on resize with transitionend event
+  useEffect(() => {
+    const node = nodeRef.current;
+    if (!node) return;
+    
+    const handleTransitionEnd = () => {
+      if (onNodeResize) onNodeResize();
+    };
+    
+    node.addEventListener('transitionend', handleTransitionEnd);
+    return () => {
+      node.removeEventListener('transitionend', handleTransitionEnd);
+    };
+  }, [onNodeResize]);
   
   const nodeTypeInfo = NODE_TYPES[currentNode.type];
   
@@ -329,12 +397,21 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, c
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    // Don't trigger node drag if we're clicking on a port
+    if (
+      e.target instanceof Node && 
+      (topPortRef.current?.contains(e.target as Node) || 
+       bottomPortRef.current?.contains(e.target as Node))
+    ) {
+      return;
+    }
+
     // Don't allow node dragging when in pan mode
     if (isPanMode()) {
       e.stopPropagation(); // Allow event to propagate to the diagram for panning
       return;
     }
-    
+
     if ((e.target as HTMLElement).tagName === 'INPUT' || 
         (e.target as HTMLElement).tagName === 'TEXTAREA' || 
         (e.target as HTMLElement).tagName === 'BUTTON' ||
@@ -351,22 +428,24 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, c
     const diagramEl = document.getElementById('diagram-container');
     if (!diagramEl || !nodeRef.current) return;
 
+    // First ensure this node is selected - this is important for dragging to work properly
+    onSelect(node.id);
+    
+    // Start dragging
+    isDraggingRef.current = true;
     hasMovedRef.current = false;
-
     dragStartPosRef.current = {
       x: e.clientX,
       y: e.clientY
     };
-
     initialNodePosRef.current = {
       x: position.x,
       y: position.y
     };
-
-    isDraggingRef.current = true;
-
+    
+    // Notify parent that dragging started
     onDragStart();
-
+    
     if (nodeRef.current) {
       nodeRef.current.style.zIndex = '100';
       nodeRef.current.style.opacity = '0.95';
@@ -441,8 +520,13 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, c
       setPosition({ x: finalX, y: finalY });
       
       try {
-        // Update in database
-        await NodeService.updateNodePosition(node.id, finalX, finalY);
+        // Use the callback if provided, otherwise fallback to direct database update
+        if (onPositionChange) {
+          onPositionChange(node.id, finalX, finalY);
+        } else {
+          // Fallback to direct database update if callback is not provided
+          await NodeService.updateNodePosition(node.id, finalX, finalY);
+        }
       } catch (error) {
         console.error('Error updating node position:', error);
         // Revert to original position on error
@@ -471,6 +555,16 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, c
   // Render ports with subtle cross/dot indicators for causality direction
   const renderTopPort = () => (
     <Box 
+      ref={topPortRef}
+      className="node-top-port"
+      onMouseDown={(e) => {
+        e.stopPropagation(); // Prevent node drag
+        onPortMouseDown(node.id, 'top', e);
+      }}
+      onMouseUp={(e) => {
+        e.stopPropagation(); // Prevent other handlers
+        onPortMouseUp(node.id, 'top', e);
+      }}
       sx={{
         position: 'absolute',
         top: -8,
@@ -486,6 +580,7 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, c
         justifyContent: 'center',
         zIndex: 2,
         boxShadow: `0 0 3px ${COLORS.shadowNormal}`,
+        cursor: 'pointer',
         '&::after': {
           content: '""',
           width: 5,
@@ -504,6 +599,16 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, c
   
   const renderBottomPort = () => (
     <Box 
+      ref={bottomPortRef}
+      className="node-bottom-port"
+      onMouseDown={(e) => {
+        e.stopPropagation(); // Prevent node drag
+        onPortMouseDown(node.id, 'bottom', e);
+      }}
+      onMouseUp={(e) => {
+        e.stopPropagation(); // Prevent other handlers
+        onPortMouseUp(node.id, 'bottom', e);
+      }}
       sx={{
         position: 'absolute',
         bottom: -8,
@@ -519,12 +624,13 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, c
         justifyContent: 'center',
         zIndex: 2,
         boxShadow: `0 0 3px ${COLORS.shadowNormal}`,
+        cursor: 'pointer',
         '&::after': {
           content: '""',
           width: 7,
           height: 7,
           backgroundImage: `linear-gradient(to bottom right, transparent 45%, ${COLORS.border} 45%, ${COLORS.border} 55%, transparent 55%), 
-                           linear-gradient(to bottom left, transparent 45%, ${COLORS.border} 45%, ${COLORS.border} 55%, transparent 55%)`,
+                         linear-gradient(to bottom left, transparent 45%, ${COLORS.border} 45%, ${COLORS.border} 55%, transparent 55%)`,
           opacity: 0.8
         },
         transition: 'transform 0.15s ease',
@@ -554,6 +660,12 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, c
   const titleContainerWidth = isExpanded ? 170 : 130; // Wider title container in expanded mode
   const buttonContainerWidth = 70; // Fixed width for button container
   
+  // Add these new event handlers for text fields
+  const handleTextFieldDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent the double-click from bubbling up to the Paper component
+  };
+
+  // Modify existing handler
   const handleTextFieldKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Delete' || e.key === 'Backspace') {
       e.stopPropagation();
@@ -563,6 +675,7 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, c
   return (
     <Paper
       ref={nodeRef}
+      data-node-id={node.id}
       elevation={0}
       className={`${className || ''}`}
       sx={{
@@ -592,10 +705,13 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, c
         height: 'auto', // Allow height to adjust with content
         minHeight: isExpanded ? 'none' : 'auto', // Remove minimum height restriction in collapsed mode
       }}
-      onClick={handleClick}
       onMouseDown={handleMouseDown}
+      onClick={handleClick}
       onDoubleClick={toggleExpanded}
     >
+      {/* Top port */}
+      {renderTopPort()}
+      
       {/* Main container with relative positioning for absolute elements */}
       <Box sx={{ position: 'relative' }}>
         {/* Tabs - absolutely positioned above content */}
@@ -609,7 +725,7 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, c
           opacity: isExpanded ? 1 : 0,
           pointerEvents: isExpanded ? 'auto' : 'none',
           visibility: isExpanded ? 'visible' : 'hidden',
-          backgroundColor: `${NODE_TYPES[currentNode.type].color}${isDarkMode ? '20' : '10'}`,
+          backgroundColor: 'transparent',
           borderTopLeftRadius: 0,
           borderTopRightRadius: 0,
           borderLeft: 'none',
@@ -623,42 +739,53 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, c
             variant="fullWidth"
             sx={{
               minHeight: '36px',
-              borderBottom: `1px solid ${COLORS.divider}`,
+              borderBottom: 'none',
               '& .MuiTabs-indicator': {
-                backgroundColor: COLORS.border
+                display: 'none'
+              },
+              // Common styling for all tab icons
+              '& .MuiSvgIcon-root': {
+                fontSize: '16px',
+                opacity: 0.55, // Reduced opacity, uniform across all icons
+                transition: 'opacity 0.2s, filter 0.2s',
+              },
+              // Styling for active tab icon
+              '& .Mui-selected .MuiSvgIcon-root': {
+                opacity: 0.75, // Slightly higher opacity for active tab
+                filter: isDarkMode ? 'brightness(1.5)' : 'brightness(0.8)'
               }
             }}
           >
             <Tab 
-              icon={<EditIcon sx={{ fontSize: '16px' }} />} 
+              icon={<EditIcon />} 
               disableRipple
               sx={{ 
                 minHeight: '36px',
                 color: COLORS.textSecondary,
                 '&.Mui-selected': {
-                  color: COLORS.border
+                  color: COLORS.textPrimary
                 }
               }}
             />
             <Tab 
-              icon={<DescriptionIcon sx={{ fontSize: '16px' }} />} 
+              icon={<DescriptionIcon />} 
               disableRipple
               sx={{ 
                 minHeight: '36px',
                 color: COLORS.textSecondary,
                 '&.Mui-selected': {
-                  color: COLORS.border
+                  color: COLORS.textPrimary
                 }
               }}
             />
             <Tab 
-              icon={<ChatIcon sx={{ fontSize: '16px' }} />} 
+              icon={<ChatIcon />} 
               disableRipple
               sx={{ 
                 minHeight: '36px',
                 color: COLORS.textSecondary,
                 '&.Mui-selected': {
-                  color: COLORS.border
+                  color: COLORS.textPrimary
                 }
               }}
             />
@@ -759,6 +886,8 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, c
                     value={currentNode.title}
                     onChange={handleTitleChange}
                     onKeyDown={handleTextFieldKeyDown}
+                    onDoubleClick={handleTextFieldDoubleClick}
+                    onClick={(e) => e.stopPropagation()}
                     multiline
                     maxRows={10}
                     sx={{ 
@@ -891,6 +1020,8 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, c
                   value={currentNode.description}
                   onChange={handleDescriptionChange}
                   onKeyDown={handleTextFieldKeyDown}
+                  onDoubleClick={handleTextFieldDoubleClick}
+                  onClick={(e) => e.stopPropagation()}
                   sx={{ 
                     '& .MuiInput-underline:before': { 
                       borderBottom: 'none'
@@ -959,13 +1090,8 @@ export function NodeItem({ node, isSelected, onSelect, onDragStart, onDragEnd, c
         </Box>
       </Box>
       
-      {/* Ports for connections - only show in collapsed mode */}
-      {!isExpanded && (
-        <>
-          {renderTopPort()}
-          {renderBottomPort()}
-        </>
-      )}
+      {/* Bottom port - always render it */}
+      {renderBottomPort()}
 
       {/* Node Type Selection Modal */}
       <Dialog 
