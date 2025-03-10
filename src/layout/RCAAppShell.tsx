@@ -10,7 +10,6 @@ import {
   Tooltip,
   Typography,
   Divider,
-  Stack,
   Paper,
   Menu,
   MenuItem,
@@ -26,9 +25,6 @@ import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import KeyboardTabIcon from '@mui/icons-material/KeyboardTab';
-import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
-import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
-import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined';
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
 import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
@@ -43,12 +39,11 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import CropFreeOutlinedIcon from '@mui/icons-material/CropFreeOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
-import CableOutlinedIcon from '@mui/icons-material/CableOutlined'; // Cable icon for connections
 
 // Import components
 import { ProjectSettings } from './ProjectSettings';
 import { AISettings } from './AISettings';
-import { DiagramView } from './DiagramView';
+import { DiagramView, DiagramContextProviders } from './DiagramView';
 import { ReportView } from './ReportView';
 import { SummaryView } from './SummaryView';
 import { NewProjectDialog } from '../components/NewProjectDialog';
@@ -56,6 +51,7 @@ import { LoadProjectDialog } from '../components/LoadProjectDialog';
 import { useProject } from '../contexts/ProjectContext';
 import { useUser } from '../contexts/UserContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { RightSidebarTools } from '../graph/RightSidebarTools';
 
 // Default drawer width and minimum width
 const DEFAULT_DRAWER_WIDTH = 300;
@@ -678,80 +674,74 @@ export function RCAAppShell() {
             flexGrow: 1, 
             position: 'relative',
             overflow: 'auto',
+            display: 'flex'
           }}>
-            {/* Main view content */}
-            {mainTabIndex === 0 && <DiagramView />}
-            {mainTabIndex === 1 && <ReportView />}
-            {mainTabIndex === 2 && <SummaryView />}
-
-            {/* View Controls (only in diagram view) */}
-            {mainTabIndex === 0 && (
-              <Paper
-                elevation={2}
-                sx={{
-                  position: 'absolute',
-                  bottom: 16,
-                  left: '50%',
-                  transform: 'translateX(-50%)',
+            {/* Main view content with context providers */}
+            {mainTabIndex === 0 ? (
+              <DiagramContextProviders>
+                <Box sx={{ 
                   display: 'flex',
-                  alignItems: 'center',
-                  p: 0.5,
-                  borderRadius: 8,
-                  backgroundColor: isDarkMode ? 'rgba(24, 24, 24, 0.9)' : 'rgba(255, 255, 255, 0.9)',
-                  border: `1px solid ${COLORS.border}`,
-                  zIndex: 1000,
-                }}
-              >
-                <IconButton size="small" sx={{ mx: 0.5, color: COLORS.iconColor }}>
-                  <ZoomInOutlinedIcon fontSize="small" />
-                </IconButton>
-                <IconButton size="small" sx={{ mx: 0.5, color: COLORS.iconColor }}>
-                  <ZoomOutOutlinedIcon fontSize="small" />
-                </IconButton>
-                <IconButton size="small" sx={{ mx: 0.5, color: COLORS.iconColor }}>
-                  <PanToolOutlinedIcon fontSize="small" />
-                </IconButton>
-                <IconButton size="small" sx={{ mx: 0.5, color: COLORS.iconColor }}>
-                  <CropFreeOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Paper>
+                  width: '100%',
+                  height: '100%',
+                }}>
+                  <Box sx={{ 
+                    flexGrow: 1, 
+                    position: 'relative',
+                  }}>
+                    <DiagramView />
+                    
+                    {/* View Controls */}
+                    <Paper
+                      elevation={2}
+                      sx={{
+                        position: 'absolute',
+                        bottom: 16,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        p: 0.5,
+                        borderRadius: 8,
+                        backgroundColor: isDarkMode ? 'rgba(24, 24, 24, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+                        border: `1px solid ${COLORS.border}`,
+                        zIndex: 1000,
+                      }}
+                    >
+                      <IconButton size="small" sx={{ mx: 0.5, color: COLORS.iconColor }}>
+                        <ZoomInOutlinedIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" sx={{ mx: 0.5, color: COLORS.iconColor }}>
+                        <ZoomOutOutlinedIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" sx={{ mx: 0.5, color: COLORS.iconColor }}>
+                        <PanToolOutlinedIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" sx={{ mx: 0.5, color: COLORS.iconColor }}>
+                        <CropFreeOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </Paper>
+                  </Box>
+                  
+                  {/* RIGHT SIDEBAR */}
+                  <Box sx={{
+                    width: RIGHT_TOOLBAR_WIDTH,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    backgroundColor: COLORS.background,
+                    flexShrink: 0,
+                    height: '100%',
+                    borderLeft: BORDER_STYLE,
+                  }}>
+                    <RightSidebarTools />
+                  </Box>
+                </Box>
+              </DiagramContextProviders>
+            ) : (
+              <>
+                {mainTabIndex === 1 && <ReportView />}
+                {mainTabIndex === 2 && <SummaryView />}
+              </>
             )}
-          </Box>
-
-          {/* RIGHT SIDEBAR (TOOLBAR) */}
-          <Box sx={{
-            width: RIGHT_TOOLBAR_WIDTH,
-            borderLeft: BORDER_STYLE,
-            display: 'flex',
-            flexDirection: 'column',
-            p: 0.5,
-            pt: 3,
-            alignItems: 'center',
-            backgroundColor: COLORS.background,
-            flexShrink: 0,
-          }}>
-            <Stack spacing={2} alignItems="center">
-              <Tooltip title="Add Node" placement="left">
-                <IconButton size="small" sx={{ color: COLORS.iconColor }}>
-                  <AddOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Add Connection" placement="left">
-                <IconButton size="small" sx={{ color: COLORS.iconColor }}>
-                  <CableOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Duplicate" placement="left">
-                <IconButton size="small" sx={{ color: COLORS.iconColor }}>
-                  <ContentCopyOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Delete" placement="left">
-                <IconButton size="small" sx={{ color: COLORS.iconColor }}>
-                  <DeleteOutlineOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Stack>
           </Box>
         </Box>
       </Box>

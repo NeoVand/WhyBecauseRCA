@@ -1,6 +1,9 @@
-import { Box, Typography } from '@mui/material';
-import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
+import { Box } from '@mui/material';
 import { useTheme } from '../contexts/ThemeContext';
+import { GraphProvider } from '../contexts/GraphContext';
+import { ToolbarProvider } from '../contexts/ToolbarContext';
+import CausalGraph from '../graph/CausalGraph';
+import { useProject } from '../contexts/ProjectContext';
 
 // Function to get colors based on current theme
 const getViewColors = (isDarkMode: boolean) => {
@@ -15,6 +18,39 @@ const getViewColors = (isDarkMode: boolean) => {
     gridDot: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)', // Grid dots
     diagramBg: isDarkMode ? '#121212' : '#ffffff'               // Diagram background
   };
+};
+
+// Export the providers for use in global context
+export const DiagramContextProviders = ({ children }: { children: React.ReactNode }) => {
+  // Check if we have a current project
+  const { currentProject } = useProject();
+  
+  if (!currentProject) {
+    return (
+      <Box 
+        sx={{ 
+          height: '100%', 
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#121212',
+          color: '#a0a0a0'
+        }}
+      >
+        <div>No project selected. Please create or open a project.</div>
+      </Box>
+    );
+  }
+  
+  return (
+    <ToolbarProvider>
+      <GraphProvider>
+        {children}
+      </GraphProvider>
+    </ToolbarProvider>
+  );
 };
 
 export function DiagramView() {
@@ -37,32 +73,7 @@ export function DiagramView() {
         flexGrow: 1,
       }}
     >
-      {/* Empty state / placeholder */}
-      <Box 
-        sx={{ 
-          height: '100%',
-          width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity: 0.7,
-        }}
-      >
-        <AccountTreeOutlinedIcon 
-          sx={{ 
-            fontSize: 64,
-            color: COLORS.lightText,
-            mb: 2
-          }} 
-        />
-        <Typography variant="h6" sx={{ color: COLORS.lightText }}>
-          Your RCA diagram will appear here
-        </Typography>
-        <Typography variant="body2" sx={{ color: COLORS.lightText, mt: 1 }}>
-          Use the toolbar to add nodes and connections
-        </Typography>
-      </Box>
+      <CausalGraph />
     </Box>
   );
 } 

@@ -15,11 +15,14 @@
     "@emotion/styled": "^11.14.0",
     "@mui/icons-material": "^6.4.7",
     "@mui/material": "^6.4.7",
+    "@types/lodash.debounce": "^4.0.9",
     "dexie": "^4.0.11",
     "framer-motion": "^12.4.10",
+    "lodash.debounce": "^4.0.8",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.3.0",
+    "reactflow": "^11.11.4",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
