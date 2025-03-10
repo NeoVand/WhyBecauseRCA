@@ -198,8 +198,6 @@ export function NodeItem({
     };
   }, [onNodeResize]);
   
-  const nodeTypeInfo = NODE_TYPES[currentNode.type];
-  
   // Helper function to get node colors based on theme and state
   const getColors = (isDark: boolean) => {
     // Get the node's type color
@@ -216,11 +214,11 @@ export function NodeItem({
         : node.type === 'Root Cause' as NodeType
           ? (isDark ? '#4f4f5f' : '#e0e0e0')
           : (isDark ? '#333333' : '#e0e0e0'),
-      borderWidth: isSelected ? 2 : 1, // thicker border when selected
+      borderWidth: isSelected ? 1 : 1, // keep border consistent regardless of selection
       shadowNormal: isDark ? '0 1px 3px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.1)',
       shadowSelected: isDark 
-        ? `0 0 0 2px ${nodeTypeColor}80, 0 2px 5px rgba(0,0,0,0.3)` // Use node's type color with opacity
-        : `0 0 0 2px ${nodeTypeColor}50, 0 2px 5px rgba(0,0,0,0.1)`, // Use node's type color with opacity
+        ? `0 0 0 1px ${nodeTypeColor}80, 0 2px 5px rgba(0,0,0,0.3)` // Reduced from 2px to 1px
+        : `0 0 0 1px ${nodeTypeColor}50, 0 2px 5px rgba(0,0,0,0.1)`, // Reduced from 2px to 1px
       shadowExpanded: isDark 
         ? '0 4px 12px rgba(0,0,0,0.5)' 
         : '0 4px 12px rgba(0,0,0,0.15)',
@@ -371,7 +369,9 @@ export function NodeItem({
   };
   
   // Handle tab changes
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    // Stop propagation to prevent the click from also triggering node selection
+    event.stopPropagation();
     setActiveTab(newValue);
   };
   
@@ -386,8 +386,14 @@ export function NodeItem({
   
   // Handle clicks without dragging
   const handleClick = (e: React.MouseEvent) => {
-    // Only handle as a click if we didn't move much
-    if (!hasMovedRef.current) {
+    // Check if click was on a tab or tab area
+    const isTabClick = isExpanded && (
+      (e.target as HTMLElement).closest('.MuiTabs-root') || 
+      (e.target as HTMLElement).closest('.MuiTab-root')
+    );
+    
+    // Only handle as a click if we didn't move much and not clicking tabs
+    if (!hasMovedRef.current && !isTabClick) {
       // Toggle selection on click
       onSelect(node.id);
       
@@ -488,7 +494,7 @@ export function NodeItem({
     }
   };
   
-  const handleMouseUp = async (e: MouseEvent) => {
+  const handleMouseUp = async () => {
     // Clean up listeners first to prevent any unexpected behavior
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
@@ -681,6 +687,11 @@ export function NodeItem({
     }
   };
   
+  // Helper function to prevent node selection when clicking on tabs
+  const preventNodeSelection = (e: React.MouseEvent) => {
+    e.stopPropagation();
+  };
+  
   return (
     <Paper
       ref={nodeRef}
@@ -740,12 +751,14 @@ export function NodeItem({
           borderLeft: 'none',
           borderRight: 'none',
           borderTop: 'none',
+          borderBottom: isExpanded ? `1px solid ${COLORS.divider}` : 'none',
           transition: 'top 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
         }}>
           <Tabs 
             value={activeTab} 
             onChange={handleTabChange}
             variant="fullWidth"
+            onClick={preventNodeSelection}
             sx={{
               minHeight: '36px',
               borderBottom: 'none',
@@ -768,6 +781,7 @@ export function NodeItem({
             <Tab 
               icon={<EditIcon />} 
               disableRipple
+              onClick={preventNodeSelection}
               sx={{ 
                 minHeight: '36px',
                 color: COLORS.textSecondary,
@@ -779,6 +793,7 @@ export function NodeItem({
             <Tab 
               icon={<DescriptionIcon />} 
               disableRipple
+              onClick={preventNodeSelection}
               sx={{ 
                 minHeight: '36px',
                 color: COLORS.textSecondary,
@@ -790,6 +805,7 @@ export function NodeItem({
             <Tab 
               icon={<ChatIcon />} 
               disableRipple
+              onClick={preventNodeSelection}
               sx={{ 
                 minHeight: '36px',
                 color: COLORS.textSecondary,
@@ -1017,6 +1033,7 @@ export function NodeItem({
                 height: 'auto',
                 transition: 'height 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
               }}
+              onClick={isExpanded ? preventNodeSelection : undefined}
             >
               {isEditing ? (
                 <TextField
@@ -1077,22 +1094,26 @@ export function NodeItem({
             </Box>
 
             {/* Evidence tab content */}
-            <Box sx={{ 
-              display: isExpanded && activeTab === 1 ? 'block' : 'none',
-              height: isExpanded && activeTab === 1 ? 'auto' : 0,
-              transition: 'height 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              overflow: 'hidden'
-            }}>
+            <Box 
+              sx={{ 
+                display: isExpanded && activeTab === 1 ? 'block' : 'none',
+                height: isExpanded && activeTab === 1 ? 'auto' : 0,
+                transition: 'height 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              }}
+              onClick={preventNodeSelection}
+            >
               {renderEvidenceContent()}
             </Box>
             
             {/* Chat tab content */}
-            <Box sx={{ 
-              display: isExpanded && activeTab === 2 ? 'block' : 'none',
-              height: isExpanded && activeTab === 2 ? 'auto' : 0,
-              transition: 'height 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              overflow: 'hidden'
-            }}>
+            <Box 
+              sx={{ 
+                display: isExpanded && activeTab === 2 ? 'block' : 'none',
+                height: isExpanded && activeTab === 2 ? 'auto' : 0,
+                transition: 'height 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              }}
+              onClick={preventNodeSelection}
+            >
               {renderChatContent()}
             </Box>
           </Box>

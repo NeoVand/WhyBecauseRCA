@@ -17,32 +17,33 @@ import {
 } from '@mui/material';
 import { NodeType } from '../models/types';
 
-// Import MUI icons - use outlined versions where possible
-import UndoOutlinedIcon from '@mui/icons-material/UndoOutlined';
-import RedoOutlinedIcon from '@mui/icons-material/RedoOutlined';
+// Import MUI icons - using consistent outlined versions
+import UndoRoundedIcon from '@mui/icons-material/UndoRounded';
+import RedoRoundedIcon from '@mui/icons-material/RedoRounded';
 import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
-import KeyboardTabIcon from '@mui/icons-material/KeyboardTab';
-import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
+import KeyboardTabRoundedIcon from '@mui/icons-material/KeyboardTabRounded';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
-import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
-import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined';
-import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
-import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
-import ZoomInOutlinedIcon from '@mui/icons-material/ZoomInOutlined';
-import ZoomOutOutlinedIcon from '@mui/icons-material/ZoomOutOutlined';
-import PanToolOutlinedIcon from '@mui/icons-material/PanToolOutlined';
-import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
-import SummarizeOutlinedIcon from '@mui/icons-material/SummarizeOutlined';
-import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
-import CodeIcon from '@mui/icons-material/Code';
-import LogoutIcon from '@mui/icons-material/Logout';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import CropFreeOutlinedIcon from '@mui/icons-material/CropFreeOutlined';
-import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
-import MouseOutlinedIcon from '@mui/icons-material/MouseOutlined';
+import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import PersonOutlineRoundedIcon from '@mui/icons-material/PersonOutlineRounded';
+import DarkModeRoundedIcon from '@mui/icons-material/DarkModeRounded';
+import LightModeRoundedIcon from '@mui/icons-material/LightModeRounded';
+import ZoomInRoundedIcon from '@mui/icons-material/ZoomInRounded';
+import ZoomOutRoundedIcon from '@mui/icons-material/ZoomOutRounded';
+import PanToolRoundedIcon from '@mui/icons-material/PanToolRounded';
+import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
+import SummarizeRoundedIcon from '@mui/icons-material/SummarizeRounded';
+import ArticleRoundedIcon from '@mui/icons-material/ArticleRounded';
+import CodeRoundedIcon from '@mui/icons-material/CodeRounded';
+import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
+import AccountCircleRoundedIcon from '@mui/icons-material/AccountCircleRounded';
+import CropFreeRoundedIcon from '@mui/icons-material/CropFreeRounded';
+import SmartToyRoundedIcon from '@mui/icons-material/SmartToyRounded';
+import MouseRoundedIcon from '@mui/icons-material/MouseRounded';
+import { SvgIconComponent } from '@mui/icons-material';
 
 // Import components
 import { DiagramView } from './DiagramView';
@@ -104,6 +105,40 @@ const AltRouteRotated = ({ iconColor }: { iconColor: string }) => {
         <path d="M440-80v-200q0-56-17-83t-45-53l57-57q12 11 23 23.5t22 26.5q14-19 28.5-33.5T538-485q38-35 69-81t33-161l-63 63-57-56 160-160 160 160-56 56-64-63q-2 143-44 203.5T592-425q-32 29-52 56.5T520-280v200h-80ZM248-633q-4-20-5.5-44t-2.5-50l-64 63-56-56 160-160 160 160-57 56-63-62q0 21 2 39.5t4 34.5l-78 19Zm86 176q-20-21-38.5-49T263-575l77-19q10 27 23 46t28 34l-57 57Z"/>
       </g>
     </svg>
+  );
+};
+
+// Custom Icon wrapper component for consistent styling
+interface StyledIconProps {
+  icon: SvgIconComponent;
+  sx?: any;
+  variant?: 'rounded' | 'outlined';
+}
+
+const StyledIcon = ({ icon: IconComponent, sx = {}, variant = 'rounded' }: StyledIconProps) => {
+  const baseStyles = {
+    fontSize: '18px',
+    opacity: 0.85, // Slightly reduce opacity for softer appearance
+    ...(variant === 'rounded' ? {
+      strokeWidth: 0.4,
+      strokeLinecap: 'round',
+      stroke: 'currentColor',
+      fill: 'currentColor',
+    } : {
+      strokeWidth: 0.5,
+      fillOpacity: 0.8,
+      stroke: 'currentColor',
+    })
+  };
+  
+  return (
+    <IconComponent
+      fontSize="small"
+      sx={{
+        ...baseStyles,
+        ...sx
+      }}
+    />
   );
 };
 
@@ -460,7 +495,7 @@ export function RCAAppShell() {
                   mr: 1,
                 }}
               >
-                <KeyboardTabIcon 
+                <KeyboardTabRoundedIcon 
                   sx={{ 
                     transform: 'rotate(180deg)',
                     transition: 'transform 0.3s',
@@ -522,7 +557,7 @@ export function RCAAppShell() {
                     p: 1,
                   }}
                 >
-                  <KeyboardTabIcon 
+                  <KeyboardTabRoundedIcon 
                     sx={{ 
                       transform: 'rotate(0deg)',
                       transition: 'transform 0.3s',
@@ -567,17 +602,17 @@ export function RCAAppShell() {
               }}
             >
               <Tab 
-                icon={<AccountTreeOutlinedIcon fontSize="small" sx={{ mr: 1 }} />} 
+                icon={<StyledIcon icon={AccountTreeRoundedIcon} sx={{ mr: 1 }} />} 
                 iconPosition="start"
                 label="Diagram" 
               />
               <Tab 
-                icon={<ArticleOutlinedIcon fontSize="small" sx={{ mr: 1 }} />} 
+                icon={<StyledIcon icon={ArticleRoundedIcon} sx={{ mr: 1 }} />} 
                 iconPosition="start"
                 label="Report" 
               />
               <Tab 
-                icon={<SummarizeOutlinedIcon fontSize="small" sx={{ mr: 1 }} />} 
+                icon={<StyledIcon icon={SummarizeRoundedIcon} sx={{ mr: 1 }} />} 
                 iconPosition="start"
                 label="Summary" 
               />
@@ -613,12 +648,12 @@ export function RCAAppShell() {
           }}>
             <Tooltip title="Undo">
               <IconButton size="small" sx={{ color: COLORS.iconColor }}>
-                <UndoOutlinedIcon fontSize="small" />
+                <StyledIcon icon={UndoRoundedIcon} />
               </IconButton>
             </Tooltip>
             <Tooltip title="Redo">
               <IconButton size="small" sx={{ color: COLORS.iconColor }}>
-                <RedoOutlinedIcon fontSize="small" />
+                <StyledIcon icon={RedoRoundedIcon} />
               </IconButton>
             </Tooltip>
 
@@ -628,7 +663,7 @@ export function RCAAppShell() {
                 sx={{ color: COLORS.iconColor }}
                 onClick={() => setNewProjectDialogOpen(true)}
               >
-                <CreateNewFolderOutlinedIcon fontSize="small" />
+                <StyledIcon icon={CreateNewFolderOutlinedIcon} />
               </IconButton>
             </Tooltip>
             <Tooltip title="Open Project">
@@ -637,12 +672,12 @@ export function RCAAppShell() {
                 sx={{ color: COLORS.iconColor }}
                 onClick={() => setLoadProjectDialogOpen(true)}
               >
-                <FolderOpenOutlinedIcon fontSize="small" />
+                <StyledIcon icon={FolderOpenOutlinedIcon} />
               </IconButton>
             </Tooltip>
             <Tooltip title="Save Project">
               <IconButton size="small" sx={{ color: COLORS.iconColor }}>
-                <SaveOutlinedIcon fontSize="small" />
+                <StyledIcon icon={SaveOutlinedIcon} />
               </IconButton>
             </Tooltip>
 
@@ -652,12 +687,12 @@ export function RCAAppShell() {
                 sx={{ color: COLORS.iconColor }}
                 onClick={toggleTheme}
               >
-                {isDarkMode ? <LightModeOutlinedIcon fontSize="small" /> : <DarkModeOutlinedIcon fontSize="small" />}
+                {isDarkMode ? <StyledIcon icon={LightModeRoundedIcon} /> : <StyledIcon icon={DarkModeRoundedIcon} />}
               </IconButton>
             </Tooltip>
             <Tooltip title="Settings">
               <IconButton size="small" sx={{ color: COLORS.iconColor }}>
-                <SettingsOutlinedIcon fontSize="small" />
+                <StyledIcon icon={SettingsOutlinedIcon} />
               </IconButton>
             </Tooltip>
             <Tooltip title="User Account">
@@ -669,7 +704,7 @@ export function RCAAppShell() {
                 aria-haspopup="true"
                 aria-expanded={userMenuOpen ? 'true' : undefined}
               >
-                <PersonOutlineOutlinedIcon fontSize="small" />
+                <StyledIcon icon={PersonOutlineRoundedIcon} />
               </IconButton>
             </Tooltip>
           </Box>
@@ -729,13 +764,13 @@ export function RCAAppShell() {
                 }}
               >
                 <Tab 
-                  icon={<CodeIcon sx={{ fontSize: 18, mr: 1 }} />}
+                  icon={<StyledIcon icon={CodeRoundedIcon} sx={{ mr: 1 }} />}
                   iconPosition="start" 
                   label="Project" 
                   sx={{ minHeight: '40px' }}
                 />
                 <Tab 
-                  icon={<SmartToyOutlinedIcon fontSize="small" sx={{ mr: 1, fontSize: 18 }} />} 
+                  icon={<StyledIcon icon={SmartToyRoundedIcon} sx={{ mr: 1 }} />} 
                   iconPosition="start" 
                   label="AI" 
                   sx={{ minHeight: '40px' }} // Ensure consistent minimum height
@@ -826,7 +861,7 @@ export function RCAAppShell() {
                     }}
                     onClick={setAddNodeMode}
                   >
-                    <AddOutlinedIcon fontSize="small" />
+                    <StyledIcon icon={AddRoundedIcon} />
                   </IconButton>
                 </Tooltip>
                 
@@ -855,7 +890,7 @@ export function RCAAppShell() {
                     }}
                     onClick={deleteSelectedNode}
                   >
-                    <DeleteOutlineOutlinedIcon fontSize="small" />
+                    <StyledIcon icon={DeleteOutlineRoundedIcon} />
                   </IconButton>
                 </Tooltip>
                 
@@ -875,7 +910,7 @@ export function RCAAppShell() {
                     }}
                     onClick={setSelectMode}
                   >
-                    <MouseOutlinedIcon fontSize="small" />
+                    <StyledIcon icon={MouseRoundedIcon} />
                   </IconButton>
                 </Tooltip>
                 
@@ -891,25 +926,25 @@ export function RCAAppShell() {
                     }}
                     onClick={togglePanMode}
                   >
-                    <PanToolOutlinedIcon fontSize="small" />
+                    <StyledIcon icon={PanToolRoundedIcon} />
                   </IconButton>
                 </Tooltip>
                 
                 <Tooltip title="Zoom In" placement="left">
                   <IconButton size="small" sx={{ color: COLORS.iconColor }}>
-                    <ZoomInOutlinedIcon fontSize="small" />
+                    <StyledIcon icon={ZoomInRoundedIcon} />
                   </IconButton>
                 </Tooltip>
                 
                 <Tooltip title="Zoom Out" placement="left">
                   <IconButton size="small" sx={{ color: COLORS.iconColor }}>
-                    <ZoomOutOutlinedIcon fontSize="small" />
+                    <StyledIcon icon={ZoomOutRoundedIcon} />
                   </IconButton>
                 </Tooltip>
                 
                 <Tooltip title="Fit to Screen" placement="left">
                   <IconButton size="small" sx={{ color: COLORS.iconColor }}>
-                    <CropFreeOutlinedIcon fontSize="small" />
+                    <StyledIcon icon={CropFreeRoundedIcon} />
                   </IconButton>
                 </Tooltip>
               </Stack>
@@ -961,7 +996,7 @@ export function RCAAppShell() {
         {currentUser && (
           <MenuItem disabled sx={{ opacity: 1 }}>
             <ListItemIcon>
-              <AccountCircleIcon fontSize="small" sx={{ color: COLORS.iconColor }} />
+              <StyledIcon icon={AccountCircleRoundedIcon} sx={{ color: COLORS.iconColor }} />
             </ListItemIcon>
             <ListItemText 
               primary={currentUser.username} 
@@ -974,7 +1009,7 @@ export function RCAAppShell() {
         <Divider />
         <MenuItem onClick={handleLogout}>
           <ListItemIcon>
-            <LogoutIcon fontSize="small" sx={{ color: COLORS.iconColor }} />
+            <StyledIcon icon={LogoutRoundedIcon} sx={{ color: COLORS.iconColor }} />
           </ListItemIcon>
           <ListItemText 
             primary="Logout" 

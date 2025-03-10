@@ -769,23 +769,82 @@ export function DiagramView({
               fill={COLORS.connectionDraft} 
             />
           </marker>
-          {/* Create dynamic markers for each connection when selected */}
-          {connections.map(connection => (
-            <marker 
-              key={`marker-${connection.id}`}
-              id={`arrowhead-selected-${connection.id}`} 
-              markerWidth="10" 
-              markerHeight="7" 
-              refX="0" 
-              refY="3.5" 
-              orient="auto"
-            >
-              <polygon 
-                points="0 0, 10 3.5, 0 7" 
-                fill={getNodeTypeColor(connection.sourceNodeId, nodes, isDarkMode)} 
-              />
-            </marker>
-          ))}
+          {/* Create dynamic markers and gradients for each connection */}
+          {connections.map(connection => {
+            const sourceColor = getNodeTypeColor(connection.sourceNodeId, nodes, isDarkMode);
+            const targetColor = getNodeTypeColor(connection.targetNodeId, nodes, isDarkMode);
+            
+            // Find the nodes to get coordinates for gradient direction
+            const sourceNode = nodes.find(n => n.id === connection.sourceNodeId);
+            const targetNode = nodes.find(n => n.id === connection.targetNodeId);
+            
+            // Default coordinates if nodes not found
+            let x1: string | number = "0%";
+            let y1: string | number = "0%"; 
+            let x2: string | number = "100%";
+            let y2: string | number = "0%";
+            
+            // If we have both nodes, set gradient coordinates to follow the connection path
+            if (sourceNode && targetNode) {
+              // Get actual positions if available
+              const sourcePos = getPortPosition(
+                connection.sourceNodeId, 
+                connection.sourcePort, 
+                nodesRef as React.RefObject<HTMLDivElement>
+              );
+              
+              const targetPos = getPortPosition(
+                connection.targetNodeId, 
+                connection.targetPort, 
+                nodesRef as React.RefObject<HTMLDivElement>
+              );
+              
+              if (sourcePos && targetPos) {
+                // Use the actual port positions for gradient
+                const [sourceX, sourceY] = sourcePos;
+                const [targetX, targetY] = targetPos;
+                x1 = String(sourceX);
+                y1 = String(sourceY);
+                x2 = String(targetX);
+                y2 = String(targetY);
+              } else {
+                // Fallback to node positions if port positions aren't available
+                x1 = String(sourceNode.x);
+                y1 = String(sourceNode.y);
+                x2 = String(targetNode.x);
+                y2 = String(targetNode.y);
+              }
+            }
+            
+            return (
+              <React.Fragment key={`defs-${connection.id}`}>
+                {/* Create a gradient for this connection */}
+                <linearGradient 
+                  id={`connection-gradient-${connection.id}`} 
+                  gradientUnits="userSpaceOnUse"
+                  x1={x1} y1={y1} x2={x2} y2={y2}
+                >
+                  <stop offset="0%" stopColor={sourceColor} />
+                  <stop offset="100%" stopColor={targetColor} />
+                </linearGradient>
+                
+                {/* Create a marker that uses the target node color */}
+                <marker 
+                  id={`arrowhead-selected-${connection.id}`} 
+                  markerWidth="10" 
+                  markerHeight="7" 
+                  refX="0" 
+                  refY="3.5" 
+                  orient="auto"
+                >
+                  <polygon 
+                    points="0 0, 10 3.5, 0 7" 
+                    fill={targetColor} 
+                  />
+                </marker>
+              </React.Fragment>
+            );
+          })}
         </defs>
         
         {/* Render existing connections */}
@@ -853,9 +912,9 @@ export function DiagramView({
           
           const isSelected = selectedConnectionId === connection.id;
           
-          // Get the color for this connection
+          // Get the color or gradient for this connection
           const connectionColor = isSelected
-            ? getNodeTypeColor(connection.sourceNodeId, nodes, isDarkMode)
+            ? `url(#connection-gradient-${connection.id})` // Use gradient when selected
             : COLORS.connectionLine;
           
           return (
