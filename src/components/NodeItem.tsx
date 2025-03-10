@@ -32,7 +32,14 @@ interface NodeItemProps {
   onPortMouseUp: (nodeId: string, portType: ConnectionPort, event: React.MouseEvent) => void;
   onNodeResize?: () => void;
   onPositionChange?: (nodeId: string, x: number, y: number) => void;
+  onNodeUpdate?: (nodeId: string, updates: Partial<CausalNode>) => void;
 }
+
+// Helper function to get node color based on type
+const getNodeColor = (nodeType: NodeType, isDark: boolean): string => {
+  const nodeTypeInfo = NODE_TYPES[nodeType];
+  return nodeTypeInfo?.color || (isDark ? '#777777' : '#999999');
+};
 
 export function NodeItem({ 
   node, 
@@ -44,7 +51,8 @@ export function NodeItem({
   onPortMouseDown,
   onPortMouseUp,
   onNodeResize,
-  onPositionChange
+  onPositionChange,
+  onNodeUpdate
 }: NodeItemProps) {
   const { isDarkMode } = useTheme();
   const THEME_COLORS = getThemeColors(isDarkMode);
@@ -61,12 +69,14 @@ export function NodeItem({
   const nodeRef = useRef<HTMLDivElement>(null);
   const topPortRef = useRef<HTMLDivElement>(null);
   const bottomPortRef = useRef<HTMLDivElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const clickOutsideHandlerRef = useRef<(e: MouseEvent) => void | null>(null);
+  
+  // Track dragging state with refs to avoid re-renders during drag
   const isDraggingRef = useRef(false);
+  const hasMovedRef = useRef(false);
   const dragStartPosRef = useRef({ x: 0, y: 0 });
   const initialNodePosRef = useRef({ x: 0, y: 0 });
-  const hasMovedRef = useRef(false);
-  const clickOutsideHandlerRef = useRef<(e: MouseEvent) => void | null>(null);
-  const titleInputRef = useRef<HTMLInputElement>(null);
   
   // Add new state for the node type modal
   const [nodeTypeModalOpen, setNodeTypeModalOpen] = useState(false);
@@ -79,16 +89,15 @@ export function NodeItem({
   // Keep position in sync with props
   useEffect(() => {
     setPosition({ x: node.x, y: node.y });
-    // Also update the style directly for smooth transitions
-    if (nodeRef.current && !isDraggingRef.current) {
-      nodeRef.current.style.transform = `translate3d(${node.x}px, ${node.y}px, 0)`;
-    }
   }, [node.x, node.y]);
   
-  // Update current node when node changes
+  // Keep local node state in sync with prop changes
   useEffect(() => {
-    setCurrentNode(node);
-  }, [node]);
+    // Only update if IDs match (same node) - prevent unnecessary updates
+    if (currentNode.id === node.id) {
+      setCurrentNode(node);
+    }
+  }, [node, currentNode.id]);
   
   // Focus title input when editing starts
   useEffect(() => {
@@ -191,40 +200,34 @@ export function NodeItem({
   
   const nodeTypeInfo = NODE_TYPES[currentNode.type];
   
-  // Colors based on theme - true darkness for dark mode
+  // Helper function to get node colors based on theme and state
   const getColors = (isDark: boolean) => {
+    // Get the node's type color
+    const nodeTypeColor = getNodeColor(node.type, isDark);
+    
     return {
-      // Card backgrounds - true dark in dark mode
-      cardBg: isDark ? '#1a1a1a' : '#ffffff',
-      expandedBg: isDark ? '#1a1a1a' : '#ffffff',
-      
-      // Text colors with strong contrast
       textPrimary: isDark ? '#ffffff' : '#272727',
       textSecondary: isDark ? '#cccccc' : '#666666',
-      
-      // Borders - thinner with better contrast
-      border: nodeTypeInfo.color,
-      borderOpacity: isSelected ? 0.9 : 0.5,
-      borderWidth: isSelected ? 1.5 : 1,
-      
-      // Divider with 50% opacity
-      divider: isDark 
-        ? `rgba(255, 255, 255, 0.1)` 
-        : `rgba(0, 0, 0, 0.1)`,
-      
-      // Ports
-      portBg: isDark ? '#333333' : '#f8f8f8',
-      
-      // Effects
-      shadowNormal: isDark 
-        ? '0 2px 6px rgba(0, 0, 0, 0.4)' 
-        : '0 2px 5px rgba(0, 0, 0, 0.08)',
+      cardBg: node.type === 'Root Cause' as NodeType 
+        ? (isDark ? '#2c2c36' : '#f5f5f5') 
+        : (isDark ? '#1e1e2d' : '#ffffff'),
+      border: isSelected 
+        ? nodeTypeColor // Use node's type color for selection
+        : node.type === 'Root Cause' as NodeType
+          ? (isDark ? '#4f4f5f' : '#e0e0e0')
+          : (isDark ? '#333333' : '#e0e0e0'),
+      borderWidth: isSelected ? 2 : 1, // thicker border when selected
+      shadowNormal: isDark ? '0 1px 3px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.1)',
       shadowSelected: isDark 
-        ? `0 0 5px ${nodeTypeInfo.color}80, 0 2px 8px rgba(0, 0, 0, 0.6)` 
-        : `0 0 5px ${nodeTypeInfo.color}50, 0 2px 10px rgba(0, 0, 0, 0.1)`,
+        ? `0 0 0 2px ${nodeTypeColor}80, 0 2px 5px rgba(0,0,0,0.3)` // Use node's type color with opacity
+        : `0 0 0 2px ${nodeTypeColor}50, 0 2px 5px rgba(0,0,0,0.1)`, // Use node's type color with opacity
       shadowExpanded: isDark 
-        ? `0 0 10px ${nodeTypeInfo.color}40, 0 10px 25px rgba(0, 0, 0, 0.5)` 
-        : `0 0 10px ${nodeTypeInfo.color}25, 0 10px 25px rgba(0, 0, 0, 0.15)`,
+        ? '0 4px 12px rgba(0,0,0,0.5)' 
+        : '0 4px 12px rgba(0,0,0,0.15)',
+      portBg: isDark ? '#333333' : '#f0f0f0',
+      portBgHover: isDark ? '#555555' : '#e0e0e0',
+      typeIndicator: nodeTypeColor, // Already using the node's type color
+      divider: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
     };
   };
   
@@ -245,8 +248,13 @@ export function NodeItem({
     setCurrentNode(newNode);
     
     try {
-      // Update in database
-      await NodeService.updateNode(currentNode.id, updatedNode);
+      // Use the callback if provided, otherwise update directly
+      if (onNodeUpdate) {
+        onNodeUpdate(currentNode.id, updatedNode);
+      } else {
+        // Update in database
+        await NodeService.updateNode(currentNode.id, updatedNode);
+      }
     } catch (error) {
       console.error('Error updating node:', error);
       // If there's an error, revert to previous state
@@ -378,14 +386,15 @@ export function NodeItem({
   
   // Handle clicks without dragging
   const handleClick = (e: React.MouseEvent) => {
-    // If we've moved, don't trigger a click
-    if (hasMovedRef.current) return;
-    
-    // Toggle selection on click
-    onSelect(node.id);
-    
-    // Prevent event from bubbling up to diagram
-    e.stopPropagation();
+    // Only handle as a click if we didn't move much
+    if (!hasMovedRef.current) {
+      // Toggle selection on click
+      onSelect(node.id);
+      
+      // Prevent event from bubbling up to diagram
+      e.stopPropagation();
+      e.preventDefault(); 
+    }
   };
   
   // Check if the app is in pan mode
@@ -408,10 +417,11 @@ export function NodeItem({
 
     // Don't allow node dragging when in pan mode
     if (isPanMode()) {
-      e.stopPropagation(); // Allow event to propagate to the diagram for panning
+      e.stopPropagation(); // Still stop propagation to prevent unexpected behavior
       return;
     }
 
+    // Don't initiate drag on form elements
     if ((e.target as HTMLElement).tagName === 'INPUT' || 
         (e.target as HTMLElement).tagName === 'TEXTAREA' || 
         (e.target as HTMLElement).tagName === 'BUTTON' ||
@@ -424,120 +434,119 @@ export function NodeItem({
     }
 
     e.preventDefault();
+    e.stopPropagation();
 
     const diagramEl = document.getElementById('diagram-container');
     if (!diagramEl || !nodeRef.current) return;
 
-    // First ensure this node is selected - this is important for dragging to work properly
-    onSelect(node.id);
-    
-    // Start dragging
-    isDraggingRef.current = true;
+    // Initialize drag state
+    isDraggingRef.current = false; // Not dragging yet, just preparing
     hasMovedRef.current = false;
     dragStartPosRef.current = {
       x: e.clientX,
       y: e.clientY
     };
+    
     initialNodePosRef.current = {
       x: position.x,
       y: position.y
     };
     
-    // Notify parent that dragging started
-    onDragStart();
-    
-    if (nodeRef.current) {
-      nodeRef.current.style.zIndex = '100';
-      nodeRef.current.style.opacity = '0.95';
-      nodeRef.current.style.cursor = 'grabbing';
-    }
-
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   };
   
   const handleMouseMove = (e: MouseEvent) => {
-    // If not dragging, ignore
-    if (!isDraggingRef.current || !nodeRef.current) return;
-    
-    // Calculate how far the mouse has moved since the drag started
+    // Calculate how far the mouse has moved since drag started
     const dx = e.clientX - dragStartPosRef.current.x;
     const dy = e.clientY - dragStartPosRef.current.y;
     
     // Consider it a move if distance is over 3 pixels (avoids accidental small movements)
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
       hasMovedRef.current = true;
+      
+      // If we haven't started dragging yet, start now
+      if (!isDraggingRef.current) {
+        isDraggingRef.current = true;
+        onDragStart();
+        
+        if (nodeRef.current) {
+          nodeRef.current.style.zIndex = '100';
+          nodeRef.current.style.opacity = '0.95';
+          nodeRef.current.style.cursor = 'grabbing';
+        }
+      }
+      
+      // Calculate new position by adding the movement delta to the initial position
+      const newX = initialNodePosRef.current.x + dx;
+      const newY = initialNodePosRef.current.y + dy;
+      
+      // Update the DOM directly for smoother dragging (no React re-renders)
+      if (nodeRef.current) {
+        nodeRef.current.style.transform = `translate3d(${newX}px, ${newY}px, 0)`;
+      }
     }
-    
-    // Calculate new position by adding the movement delta to the initial position
-    const newX = initialNodePosRef.current.x + dx;
-    const newY = initialNodePosRef.current.y + dy;
-    
-    // Update the DOM directly for smoother dragging (no React re-renders)
-    nodeRef.current.style.transform = `translate3d(${newX}px, ${newY}px, 0)`;
   };
   
-  const handleMouseUp = async (e?: MouseEvent) => {
-    // If not dragging, ignore
-    if (!isDraggingRef.current) return;
-    
-    // Remove event listeners
+  const handleMouseUp = async (e: MouseEvent) => {
+    // Clean up listeners first to prevent any unexpected behavior
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
     
-    // Reset dragging state
-    isDraggingRef.current = false;
-    
-    // Get current element position from its transform style
-    const transformStyle = nodeRef.current?.style.transform || '';
-    const translateMatch = transformStyle.match(/translate3d\((\d+)px, (\d+)px/i);
-    
-    // Calculate final position
-    let finalX = position.x;
-    let finalY = position.y;
-    
-    if (translateMatch && translateMatch.length >= 3) {
-      finalX = parseInt(translateMatch[1], 10);
-      finalY = parseInt(translateMatch[2], 10);
-    } else if (e) {
-      // Fallback to calculating position from mouse movement
-      const dx = e.clientX - dragStartPosRef.current.x;
-      const dy = e.clientY - dragStartPosRef.current.y;
-      finalX = initialNodePosRef.current.x + dx;
-      finalY = initialNodePosRef.current.y + dy;
+    // If we didn't move much, treat as a click
+    if (!hasMovedRef.current) {
+      // We'll let the click handler handle the selection
+      // Nothing to clean up here as we never started dragging
+      return;
     }
     
-    // Reset node styling
-    if (nodeRef.current) {
-      nodeRef.current.style.zIndex = isSelected ? '10' : '1';
-      nodeRef.current.style.opacity = '1';
-      nodeRef.current.style.cursor = 'grab';
-    }
-    
-    // Only update position in React state and database if we actually moved
-    if (hasMovedRef.current) {
-      // Update React state
-      setPosition({ x: finalX, y: finalY });
+    // If we were dragging, finish the drag operation
+    if (isDraggingRef.current) {
+      // Reset the dragging state
+      isDraggingRef.current = false;
       
-      try {
-        // Use the callback if provided, otherwise fallback to direct database update
-        if (onPositionChange) {
-          onPositionChange(node.id, finalX, finalY);
-        } else {
-          // Fallback to direct database update if callback is not provided
-          await NodeService.updateNodePosition(node.id, finalX, finalY);
-        }
-      } catch (error) {
-        console.error('Error updating node position:', error);
-        // Revert to original position on error
-        setPosition({ x: node.x, y: node.y });
-        if (nodeRef.current) {
-          nodeRef.current.style.transform = `translate3d(${node.x}px, ${node.y}px, 0)`;
+      // Reset the node styles
+      if (nodeRef.current) {
+        nodeRef.current.style.opacity = '1';
+        nodeRef.current.style.cursor = 'grab';
+        nodeRef.current.style.zIndex = isSelected ? '10' : '1';
+      }
+      
+      // Get the final position from the transform style
+      if (nodeRef.current) {
+        const style = window.getComputedStyle(nodeRef.current);
+        const transform = style.transform || style.webkitTransform;
+        
+        // Extract translation values from the transform matrix
+        const matrix = transform.match(/matrix\(.*?\)/)?.[0] || '';
+        if (matrix) {
+          // Parse the transform matrix
+          const values = matrix.match(/(-?[0-9\.]+)/g);
+          if (values && values.length >= 6) {
+            // matrix(a, b, c, d, tx, ty)
+            const tx = parseFloat(values[4]);
+            const ty = parseFloat(values[5]);
+            
+            // Update the position state 
+            setPosition({ x: tx, y: ty });
+            
+            // Also update the current node state
+            setCurrentNode(prevNode => ({
+              ...prevNode,
+              x: tx,
+              y: ty
+            }));
+            
+            // Notify parent component about position change
+            if (onPositionChange) {
+              onPositionChange(node.id, tx, ty);
+            }
+          }
         }
       }
     }
     
-    // Notify parent that dragging has ended
+    // Notify parent that dragging ended
     onDragEnd();
   };
   
@@ -693,8 +702,8 @@ export function NodeItem({
           : (isSelected ? COLORS.shadowSelected : COLORS.shadowNormal),
         transition: `
           width 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
-          box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
-          border 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+          box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1), 
+          border 0.15s cubic-bezier(0.4, 0, 0.2, 1), 
           transform 0.05s ease,
           background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1)
         `,

@@ -3,7 +3,7 @@ import { Box, Typography } from '@mui/material';
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import { useTheme } from '../contexts/ThemeContext';
 import { useProject } from '../contexts/ProjectContext';
-import { CausalNode, NodeType, ConnectionPort, Connection } from '../models/types';
+import { CausalNode, NodeType, NODE_TYPES, ConnectionPort, Connection } from '../models/types';
 import { NodeItem } from '../components/NodeItem';
 import NodeService from '../services/nodeService';
 import ConnectionService from '../services/connectionService';
@@ -21,7 +21,8 @@ const getViewColors = (isDarkMode: boolean) => {
     gridDot: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)', // Grid dots
     diagramBg: isDarkMode ? '#121212' : '#ffffff',               // Diagram background
     connectionLine: isDarkMode ? '#b0b0b0' : '#999999',            // Connection line color
-    connectionDraft: isDarkMode ? '#e0e0e0' : '#666666'           // Connection draft color
+    connectionDraft: isDarkMode ? '#e0e0e0' : '#666666',           // Connection draft color
+    connectionSelected: isDarkMode ? '#4fc3f7' : '#2196f3'         // Selected connection color (default)
   };
 };
 
@@ -42,7 +43,8 @@ const calculateSmoothPath = (
   targetY: number,
   sourcePort: ConnectionPort,
   targetPort: ConnectionPort,
-  curvinessFactor: number = 0.3 // Default curviness factor (0.1 = subtle, 1.0 = very curved)
+  curvinessFactor: number = 0.3, // Default curviness factor (0.1 = subtle, 1.0 = very curved)
+  shortenEnds: boolean = false   // Whether to shorten the path at both ends
 ): string => {
   // Determine direction based on port types
   const sourceDirection = sourcePort === 'top' ? -1 : 1;
@@ -52,13 +54,26 @@ const calculateSmoothPath = (
   const sourceOffset = 15 * sourceDirection;
   const targetOffset = 15 * targetDirection;
   
+  // For the clickable area, shorten the ends to avoid interfering with ports
+  const endsShortenAmount = shortenEnds ? 10 : 0;
+  
   // Calculate first segment points (exiting the source)
   const sourceExitX = sourceX;
   const sourceExitY = sourceY + sourceOffset;
   
+  // If shortening ends, adjust the source exit point
+  const adjustedSourceExitY = shortenEnds 
+    ? sourceY + (sourceOffset * 0.5) 
+    : sourceExitY;
+  
   // Calculate last segment points (entering the target)
   const targetEntryX = targetX;
   const targetEntryY = targetY + targetOffset;
+  
+  // If shortening ends, adjust the target entry point
+  const adjustedTargetEntryY = shortenEnds 
+    ? targetY + (targetOffset * 0.5) 
+    : targetEntryY;
   
   // Calculate horizontal distance between nodes
   const horizontalDistance = Math.abs(targetX - sourceX);
@@ -81,11 +96,17 @@ const calculateSmoothPath = (
   const cp2y = targetY + targetOffset + (controlPointDistance * targetDirection);
   
   // Generate path string using cubic Bezier curve
-  return `M ${sourceX} ${sourceY} ` +                // Starting point
-         `L ${sourceExitX} ${sourceExitY} ` +       // Short straight line out of node
-         `C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ` +   // Cubic Bezier curve with control points
-         `${targetEntryX} ${targetEntryY} ` +       // End point of curve
-         `L ${targetX} ${targetY}`;                 // Short straight line into node
+  // For clickable area (shortened), we start and end closer to the nodes
+  const startX = shortenEnds ? sourceX : sourceX;
+  const startY = shortenEnds ? sourceY + (endsShortenAmount * sourceDirection) : sourceY;
+  const endX = shortenEnds ? targetX : targetX;
+  const endY = shortenEnds ? targetY + (endsShortenAmount * targetDirection) : targetY;
+  
+  return `M ${startX} ${startY} ` +                // Starting point
+         `L ${adjustedSourceExitY ? sourceExitX : sourceExitX} ${adjustedSourceExitY || sourceExitY} ` +  // Short straight line out of node
+         `C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ` +  // Cubic Bezier curve with control points
+         `${targetEntryX} ${adjustedTargetEntryY || targetEntryY} ` +  // End point of curve
+         `L ${endX} ${endY}`;                      // Short straight line into node
 };
 
 // Helper function to get exact port position from DOM
@@ -124,6 +145,15 @@ const getPortPosition = (
   return [portCenterX, portCenterY];
 };
 
+// Helper function to get node color based on node ID
+const getNodeTypeColor = (nodeId: string, nodes: CausalNode[], isDarkMode: boolean): string => {
+  const node = nodes.find(n => n.id === nodeId);
+  if (!node) return isDarkMode ? '#b0b0b0' : '#999999'; // Default if node not found
+  
+  const nodeTypeInfo = NODE_TYPES[node.type];
+  return nodeTypeInfo?.color || (isDarkMode ? '#b0b0b0' : '#999999');
+};
+
 export function DiagramView({ 
   activeNodeType, 
   isSelectMode, 
@@ -138,6 +168,7 @@ export function DiagramView({
   const [nodes, setNodes] = useState<CausalNode[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   
   // Global mouse position state - track mouse position globally
@@ -157,7 +188,7 @@ export function DiagramView({
   
   // Panning state
   const [isPanning, setIsPanning] = useState(false);
-  const panStartRef = useRef({ x: 0, y: 0 });
+  const panStartRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 });
   // Store diagram viewport position rather than scroll
   const [diagramPosition, setDiagramPosition] = useState({ x: 0, y: 0 });
   
@@ -195,7 +226,12 @@ export function DiagramView({
   // Handle updating a node's position when it's dragged
   const updateNodePosition = useCallback(async (nodeId: string, x: number, y: number) => {
     try {
+      // Find the node to update
+      const nodeToUpdate = nodes.find(node => node.id === nodeId);
+      if (!nodeToUpdate) return;
+      
       // Update local state immediately for responsiveness
+      // Make sure to preserve all existing node data
       setNodes(prevNodes => prevNodes.map(node => 
         node.id === nodeId ? { ...node, x, y } : node
       ));
@@ -210,7 +246,7 @@ export function DiagramView({
     } catch (err) {
       console.error("Error updating node position:", err);
     }
-  }, [currentProject, loadConnections]);
+  }, [currentProject, loadConnections, nodes]);
   
   // Global mouse move handler - keep track of mouse position at all times
   useEffect(() => {
@@ -384,18 +420,24 @@ export function DiagramView({
     }
   };
   
-  // Handle click on the diagram background
+  // Handle diagram click for creating nodes
   const handleDiagramClick = async (e: React.MouseEvent<HTMLDivElement>) => {
-    // Don't create nodes if we're in pan mode or if we're dragging
-    if (isPanMode || isDragging || connectingState) return;
+    // Ignore clicks when dragging, panning or connecting
+    if (isDragging || isPanning || connectingState) {
+      return;
+    }
+    
+    // Clear any selections when clicking on the background
+    setSelectedNodeId(null);
+    setSelectedConnectionId(null);
     
     // Don't create nodes if we're clicking on an existing node
-    if ((e.target as HTMLElement).closest('.node-item')) return;
+    if ((e.target as HTMLElement).closest('.node-item')) {
+      return;
+    }
     
-    // Only create nodes in add mode (not select mode)
-    if (isSelectMode) {
-      // In select mode, clicking on the background deselects the current node
-        setSelectedNodeId(null);
+    // Don't create nodes in select mode
+    if (isSelectMode || isPanMode) {
       return;
     }
     
@@ -441,15 +483,30 @@ export function DiagramView({
   
   // Handle node selection
   const handleNodeSelect = (nodeId: string) => {
-    setSelectedNodeId(nodeId === selectedNodeId ? null : nodeId);
+    // Clear connection selection
+    setSelectedConnectionId(null);
+    
+    // Toggle node selection
+    setSelectedNodeId(prevId => nodeId === prevId ? null : nodeId);
+  };
+  
+  // Handle connection select
+  const handleConnectionSelect = (connectionId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent diagram click
+    setSelectedNodeId(null); // Clear node selection when selecting a connection
+    setSelectedConnectionId(connectionId === selectedConnectionId ? null : connectionId);
   };
   
   // Handle node delete with keyboard
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (selectedNodeId && (e.key === 'Delete' || e.key === 'Backspace')) {
-      deleteSelectedNode();
+    if ((e.key === 'Delete' || e.key === 'Backspace')) {
+      if (selectedNodeId) {
+        deleteSelectedNode();
+      } else if (selectedConnectionId) {
+        deleteSelectedConnection();
+      }
     }
-  }, [selectedNodeId]);
+  }, [selectedNodeId, selectedConnectionId]);
   
   // Add global keyboard handlers
   useEffect(() => {
@@ -463,12 +520,12 @@ export function DiagramView({
   const deleteSelectedNode = async () => {
     if (!selectedNodeId) return;
     
-      try {
+    try {
       // Delete any connections associated with this node
       await ConnectionService.deleteConnectionsForNode(selectedNodeId);
       
       // Delete the node
-        await NodeService.deleteNode(selectedNodeId);
+      await NodeService.deleteNode(selectedNodeId);
       
       // Update local state
       setNodes(prevNodes => prevNodes.filter(node => node.id !== selectedNodeId));
@@ -479,9 +536,29 @@ export function DiagramView({
       );
       
       // Clear selection
-        setSelectedNodeId(null);
+      setSelectedNodeId(null);
     } catch (err) {
       console.error("Error deleting node:", err);
+    }
+  };
+  
+  // Delete the selected connection
+  const deleteSelectedConnection = async () => {
+    if (!selectedConnectionId) return;
+    
+    try {
+      // Delete the connection
+      await ConnectionService.deleteConnection(selectedConnectionId);
+      
+      // Update local state
+      setConnections(prevConnections => 
+        prevConnections.filter(conn => conn.id !== selectedConnectionId)
+      );
+      
+      // Clear selection
+      setSelectedConnectionId(null);
+    } catch (err) {
+      console.error("Error deleting connection:", err);
     }
   };
   
@@ -605,24 +682,35 @@ export function DiagramView({
   
   // Add references and state for JavaScript animation
   const animationRef = useRef<number | null>(null);
-  const [dashOffset, setDashOffset] = useState(0);
+  const dashOffsetRef = useRef(0);
   
   // Setup and handle the animation with direct DOM manipulation
   useEffect(() => {
     const dashLength = 7; // Total length of dash+gap (4+3)
+    const previewDashLength = 8; // Slightly different for visual distinction
+    let previewOffset = 0;
     
     // Animation function using requestAnimationFrame
     const animateDashes = () => {
-      // Update all path elements with the current offset
+      // Update all regular connection paths
       const paths = document.querySelectorAll('.diagram-connection-path');
       paths.forEach(path => {
         if (path instanceof SVGPathElement) {
-          path.style.strokeDashoffset = String(dashOffset);
+          path.style.strokeDashoffset = String(dashOffsetRef.current);
         }
       });
       
-      // Update the offset for the next frame
-      setDashOffset((prevOffset) => (prevOffset + 0.5) % dashLength);
+      const previewPaths = document.querySelectorAll('.diagram-connection-path-preview');
+      previewPaths.forEach(path => {
+        if (path instanceof SVGPathElement) {
+          // Preview connections animate in the opposite direction and faster
+          path.style.strokeDashoffset = String(previewOffset);
+        }
+      });
+      
+      // Update the offsets for the next frame
+      dashOffsetRef.current = (dashOffsetRef.current + 0.2) % dashLength;
+      previewOffset = (previewOffset - 0.3 + previewDashLength) % previewDashLength;
       
       // Continue the animation loop
       animationRef.current = requestAnimationFrame(animateDashes);
@@ -672,7 +760,7 @@ export function DiagramView({
             id="arrowhead-draft" 
             markerWidth="10" 
             markerHeight="7" 
-            refX="0" 
+            refX="10" 
             refY="3.5" 
             orient="auto"
           >
@@ -681,6 +769,23 @@ export function DiagramView({
               fill={COLORS.connectionDraft} 
             />
           </marker>
+          {/* Create dynamic markers for each connection when selected */}
+          {connections.map(connection => (
+            <marker 
+              key={`marker-${connection.id}`}
+              id={`arrowhead-selected-${connection.id}`} 
+              markerWidth="10" 
+              markerHeight="7" 
+              refX="0" 
+              refY="3.5" 
+              orient="auto"
+            >
+              <polygon 
+                points="0 0, 10 3.5, 0 7" 
+                fill={getNodeTypeColor(connection.sourceNodeId, nodes, isDarkMode)} 
+              />
+            </marker>
+          ))}
         </defs>
         
         {/* Render existing connections */}
@@ -733,17 +838,49 @@ export function DiagramView({
             pathCurviness // Use the curviness prop
           );
           
+          // Calculate a slightly shortened path for the invisible click area
+          // to avoid interfering with the port click areas
+          const clickablePathData = calculateSmoothPath(
+            sourceX, 
+            sourceY, 
+            targetX, 
+            targetY,
+            connection.sourcePort,
+            connection.targetPort,
+            pathCurviness,
+            true // Shorten the ends to avoid interfering with ports
+          );
+          
+          const isSelected = selectedConnectionId === connection.id;
+          
+          // Get the color for this connection
+          const connectionColor = isSelected
+            ? getNodeTypeColor(connection.sourceNodeId, nodes, isDarkMode)
+            : COLORS.connectionLine;
+          
           return (
-            <path
-              key={connection.id}
-              d={pathData}
-              fill="none"
-              stroke={COLORS.connectionLine}
-              strokeWidth={1.5}
-              strokeDasharray="4 3"
-              markerEnd="url(#arrowhead)"
-              className="diagram-connection-path" // Changed class name
-            />
+            <g key={connection.id}>
+              {/* Visible connection path */}
+              <path
+                d={pathData}
+                fill="none"
+                stroke={connectionColor}
+                strokeWidth={isSelected ? 2 : 1.5}
+                strokeDasharray={isSelected ? "5 2" : "4 3"}
+                markerEnd={isSelected ? `url(#arrowhead-selected-${connection.id})` : "url(#arrowhead)"}
+                className="diagram-connection-path"
+              />
+              
+              {/* Invisible wider path for easier clicking */}
+              <path
+                d={clickablePathData}
+                fill="none"
+                stroke="transparent"
+                strokeWidth={10} // Much wider for easier clicking
+                style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+                onClick={(e) => handleConnectionSelect(connection.id, e)}
+              />
+            </g>
           );
         })}
         
@@ -762,15 +899,35 @@ export function DiagramView({
             )}
             fill="none"
             stroke={COLORS.connectionDraft}
-            strokeWidth={2.5}
+            strokeWidth={1.5}
             strokeDasharray="5 3"
+            strokeDashoffset="0"
             markerEnd="url(#arrowhead-draft)"
-            className="diagram-connection-path" // Changed class name
+            className="diagram-connection-path-preview"
           />
         )}
       </svg>
     );
   };
+  
+  // Handle updating a node when its content changes
+  const updateNode = useCallback(async (nodeId: string, updates: Partial<CausalNode>) => {
+    try {
+      // Find the node to update
+      const nodeToUpdate = nodes.find(node => node.id === nodeId);
+      if (!nodeToUpdate) return;
+      
+      // Update local state immediately for responsiveness
+      setNodes(prevNodes => prevNodes.map(node => 
+        node.id === nodeId ? { ...node, ...updates } : node
+      ));
+      
+      // Persist changes to database
+      await NodeService.updateNode(nodeId, updates);
+    } catch (err) {
+      console.error("Error updating node:", err);
+    }
+  }, [nodes]);
   
   return (
     <Box 
@@ -824,6 +981,7 @@ export function DiagramView({
               onPortMouseUp={handlePortMouseUp}
               onNodeResize={handleNodeResize}
               onPositionChange={updateNodePosition}
+              onNodeUpdate={updateNode}
               className='node-item'
           />
         ))}
